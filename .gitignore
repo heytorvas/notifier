@@ -6,11 +6,13 @@ node_modules/
 # Expo
 .expo/
 dist/
+/dist-check/
 web-build/
 expo-env.d.ts
 
 # Native
 .kotlin/
+.tools/
 *.orig.*
 *.jks
 *.p8
@@ -31,6 +33,7 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
 
 # typescript
@@ -39,3 +42,14 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Cloudflare Worker build output
+/relay/dist/
+/relay/.wrangler/
+/relay/.wrangler-test.log
+
+# local editor
+.cursor/
+
+# accidental service-account key written into the repo root
+\[object Promise\]

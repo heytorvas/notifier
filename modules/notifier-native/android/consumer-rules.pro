@@ -1,0 +1,4 @@
+-keep class expo.modules.notifiernative.NotifierNativeModule { *; }
+-keep class expo.modules.notifiernative.notifications.** extends android.app.Service { *; }
+-keep class expo.modules.notifiernative.notifications.** extends android.content.ContentProvider { *; }
+-keep class expo.modules.notifiernative.notifications.** extends androidx.work.ListenableWorker { *; }

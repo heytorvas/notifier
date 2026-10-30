@@ -1,0 +1,19 @@
+{
+  "name": "notifier-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "typecheck": "tsc --noEmit",
+    "test": "WRANGLER_LOG_PATH=.wrangler-test.log vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.9",
+    "@cloudflare/workers-types": "^5.20261028.1",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.12",
+    "wrangler": "^4.154.0"
+  }
+}
