@@ -19,6 +19,9 @@ jest.mock('../infrastructure/notifierGateway', () => ({
   notifierGateway: {
     configure: jest.fn().mockResolvedValue(undefined),
     getState: jest.fn(),
+    syncPairing: jest.fn(),
+    getAlerts: jest.fn().mockResolvedValue([]),
+    getDiagnostics: jest.fn().mockResolvedValue([]),
     getInstalledApps: jest.fn().mockResolvedValue([]),
     prepareReceiver: jest.fn().mockResolvedValue('pairing-code'),
     pairTransmitter: jest.fn().mockResolvedValue(undefined),
@@ -31,6 +34,7 @@ const freshState: NativeState = {
   role: null,
   paired: false,
   notificationAccess: false,
+  listenerConnected: false,
   sensitiveContentLimited: false,
   selectedPackages: [],
   pairedAt: null,

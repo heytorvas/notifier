@@ -47,7 +47,7 @@
     "relay:test": "npm --prefix relay test",
     "relay:typecheck": "npm --prefix relay run typecheck",
     "setup:providers": "node scripts/setup-providers.mjs",
-    "test:setup": "node --test scripts/setup-providers.test.mjs"
+    "test:setup": "node --test scripts/setup-providers.test.mjs scripts/relay-config.test.mjs"
   },
   "private": true,
   "jest": {

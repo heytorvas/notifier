@@ -74,7 +74,9 @@ battery mode, result, and evidence for each run.
 - [ ] Test emoji, accents, right-to-left text, multiline text, and mixed scripts.
 - [ ] Test maximum and over-limit app name, title, and body; content truncates without crashing.
 - [ ] Verify source app name, title, and text are readable without app-specific rewriting.
-- [ ] Verify no plaintext notification history exists in the app or relay database.
+- [ ] Verify the relay database stores no plaintext or ciphertext notification content.
+- [ ] Verify each device shows the newest 400 sent or received alerts, including failures, until unpair clears them.
+- [ ] Unpair from either device and confirm the other device drops the pairing without a second reset.
 - [ ] On Android 15+, test a detected OTP and confirm the OS limitation matches the disclosure.
 - [ ] Send a tampered nonce, ciphertext, key, and protocol version; receiver drops it safely.
 - [ ] Replay the same message ID; only one user-visible alert is produced.

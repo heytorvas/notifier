@@ -24,9 +24,9 @@ namespace_id = "1002"
 [[d1_databases]]
 binding = "DB"
 database_name = "notifier-relay"
-database_id = "56e2f0af-f93e-499c-a299-362056f25b8b"
+database_id = "replace-with-your-d1-database-id"
 migrations_dir = "migrations"
 
 [vars]
-FIREBASE_PROJECT_ID = "notifier-app-2026"
+FIREBASE_PROJECT_ID = "replace-with-your-firebase-project-id"
 ANDROID_PACKAGE_NAME = "dev.heytor.notifier"

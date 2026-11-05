@@ -100,6 +100,15 @@ internal class RelayClient(private val baseUrl: String) {
     )
   }
 
+  fun unpair(inboxId: String, token: String) {
+    request(
+      path = "/v1/inboxes/$inboxId/unpair",
+      method = "POST",
+      bearerToken = token,
+      body = JSONObject(),
+    )
+  }
+
   fun deleteInbox(inboxId: String, ownerToken: String) {
     request(
       path = "/v1/inboxes/$inboxId",

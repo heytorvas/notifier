@@ -8,16 +8,25 @@ import android.service.notification.StatusBarNotification
 import expo.modules.notifiernative.data.DeviceRole
 import expo.modules.notifiernative.data.NotifierStore
 import expo.modules.notifiernative.security.CryptoStore
+import org.json.JSONObject
 import java.util.UUID
 
 class NotifierListenerService : NotificationListenerService() {
+  override fun onCreate() {
+    super.onCreate()
+    runCatching { MaintenanceWorker.enqueue(this) }
+  }
+
   override fun onListenerConnected() {
     ListenerConnectionState.connected = true
+    ListenerRecovery.noteConnected()
+    DeviceJournal(this).quietly { addDiagnostic("Listener connected") }
     super.onListenerConnected()
   }
 
   override fun onListenerDisconnected() {
     ListenerConnectionState.connected = false
+    DeviceJournal(this).quietly { addDiagnostic("Listener disconnected") }
     requestRebind(ComponentName(this, NotifierListenerService::class.java))
     super.onListenerDisconnected()
   }
@@ -36,18 +45,67 @@ class NotifierListenerService : NotificationListenerService() {
     if (notification.notification.flags and Notification.FLAG_ONGOING_EVENT != 0) return
     if (notification.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
 
-    val key = runCatching { CryptoStore.decode(pairing.pairingKey) }.getOrNull() ?: return
-    val payload = notification.toPayload() ?: return
-    val (nonce, ciphertext) = runCatching {
-      CryptoStore.encryptPayload(key, payload)
-    }.getOrNull() ?: return
+    val journal = DeviceJournal(applicationContext)
+    val payload = notification.toPayload()
+    if (payload == null) {
+      journal.quietly {
+        upsertAlert(notification.failure("No readable text"))
+        addDiagnostic("Dropped an alert from ${notification.packageName}: no readable text")
+      }
+      return
+    }
+    val key = runCatching { CryptoStore.decode(pairing.pairingKey) }.getOrNull()
+    val encrypted = key?.let { runCatching { CryptoStore.encryptPayload(it, payload) }.getOrNull() }
+    if (key == null || encrypted == null) {
+      journal.quietly {
+        upsertAlert(notification.failure("Could not encrypt"))
+        addDiagnostic("Could not encrypt an alert from ${notification.packageName}")
+      }
+      return
+    }
+    val messageId = UUID.randomUUID().toString()
+    val content = JSONObject(payload)
     RelayMessageWorker.enqueue(
       context = applicationContext,
-      messageId = UUID.randomUUID().toString(),
+      messageId = messageId,
       inboxId = pairing.inboxId,
-      nonce = nonce,
-      ciphertext = ciphertext,
+      nonce = encrypted.first,
+      ciphertext = encrypted.second,
       expiresAt = notification.postTime + DELIVERY_TTL_MS,
+    )
+    journal.quietly {
+      upsertAlert(
+        AlertRecord(
+          id = messageId,
+          at = notification.postTime,
+          direction = "out",
+          appName = content.optString("sourceApp"),
+          packageName = notification.packageName,
+          title = content.optString("title"),
+          text = content.optString("text"),
+          status = "pending",
+          detail = "",
+        ),
+      )
+    }
+  }
+
+  private fun StatusBarNotification.failure(detail: String): AlertRecord {
+    val sourcePackage = this.packageName
+    val appName = runCatching {
+      val info = this@NotifierListenerService.packageManager.getApplicationInfo(sourcePackage, 0)
+      this@NotifierListenerService.packageManager.getApplicationLabel(info).toString()
+    }.getOrDefault(sourcePackage)
+    return AlertRecord(
+      id = UUID.randomUUID().toString(),
+      at = postTime,
+      direction = "out",
+      appName = appName,
+      packageName = sourcePackage,
+      title = "",
+      text = "",
+      status = "failed",
+      detail = detail,
     )
   }
 

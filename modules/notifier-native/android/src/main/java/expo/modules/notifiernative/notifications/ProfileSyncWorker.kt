@@ -36,7 +36,10 @@ internal class ProfileSyncWorker(
         DeviceRole.TRANSMITTER -> syncTransmitter(store, client, pairing)
       }
     }.getOrElse { error ->
-      if (error is RelayClient.RelayException && !DeliveryPolicy.shouldRetry(error.statusCode)) {
+      if (error is RelayClient.RelayException && DeliveryPolicy.isInboxMissing(error.statusCode, error.message)) {
+        PairingSync.forgetPeer(applicationContext)
+        Result.success()
+      } else if (error is RelayClient.RelayException && !DeliveryPolicy.shouldRetry(error.statusCode)) {
         Result.failure()
       } else {
         Result.retry()
@@ -74,6 +77,10 @@ internal class ProfileSyncWorker(
     sendIcons(store, client, pairing.inboxId, senderToken, key)
 
     val device = runCatching { client.fetchDevice(pairing.inboxId, senderToken) }.getOrElse { error ->
+      if (error is RelayClient.RelayException && DeliveryPolicy.isInboxMissing(error.statusCode, error.message)) {
+        PairingSync.forgetPeer(applicationContext)
+        return Result.success()
+      }
       if (error is RelayClient.RelayException && !DeliveryPolicy.shouldRetry(error.statusCode)) {
         return Result.success()
       }

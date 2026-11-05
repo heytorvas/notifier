@@ -10,10 +10,29 @@ export type PeerDevice = {
   model: string;
 };
 
+export type AlertRecord = {
+  id: string;
+  at: number;
+  direction: 'in' | 'out';
+  appName: string;
+  packageName: string;
+  title: string;
+  text: string;
+  status: 'pending' | 'delivered' | 'failed';
+  detail: string;
+};
+
+export type DiagnosticRecord = {
+  id: string;
+  at: number;
+  message: string;
+};
+
 export type NativeState = {
   role: DeviceRole | null;
   paired: boolean;
   notificationAccess: boolean;
+  listenerConnected: boolean;
   sensitiveContentLimited: boolean;
   selectedPackages: string[];
   pairedAt: number | null;
@@ -32,6 +51,7 @@ const emptyState: NativeState = {
   role: null,
   paired: false,
   notificationAccess: false,
+  listenerConnected: false,
   sensitiveContentLimited: false,
   selectedPackages: [],
   pairedAt: null,
@@ -45,6 +65,15 @@ export const notifierGateway = {
   },
   getState(): Promise<NativeState> {
     return Promise.resolve(emptyState);
+  },
+  syncPairing(): Promise<NativeState> {
+    return Promise.resolve(emptyState);
+  },
+  getAlerts(): Promise<AlertRecord[]> {
+    return Promise.resolve([]);
+  },
+  getDiagnostics(): Promise<DiagnosticRecord[]> {
+    return Promise.resolve([]);
   },
   getInstalledApps(): Promise<InstalledApp[]> {
     return Promise.resolve([]);

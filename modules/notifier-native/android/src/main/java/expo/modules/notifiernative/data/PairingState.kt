@@ -67,25 +67,26 @@ internal data class RemoteAppRecord(
 internal data class PendingCleanup(
   val relayUrl: String,
   val inboxId: String,
-  val ownerToken: String,
+  val token: String,
 )
 
 internal object PendingCleanupCodec {
   fun encode(cleanup: PendingCleanup): String =
     JSONObject()
-      .put("version", 1)
+      .put("version", 2)
       .put("relayUrl", cleanup.relayUrl)
       .put("inboxId", cleanup.inboxId)
-      .put("ownerToken", cleanup.ownerToken)
+      .put("token", cleanup.token)
       .toString()
 
   fun decode(encoded: String): PendingCleanup? = runCatching {
     val json = JSONObject(encoded)
-    require(json.optInt("version") == 1)
+    require(json.optInt("version") in 1..2)
+    val token = json.optString("token").ifBlank { json.optString("ownerToken") }
     PendingCleanup(
       relayUrl = json.getString("relayUrl").also { require(it.isNotBlank()) },
       inboxId = json.getString("inboxId").also { require(it.isNotBlank()) },
-      ownerToken = json.getString("ownerToken").also { require(it.isNotBlank()) },
+      token = token.also { require(it.isNotBlank()) },
     )
   }.getOrNull()
 }

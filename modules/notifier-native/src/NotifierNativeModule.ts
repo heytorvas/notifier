@@ -19,10 +19,32 @@ export type PeerDevice = {
   model: string;
 };
 
+export type AlertDirection = 'in' | 'out';
+export type AlertStatus = 'pending' | 'delivered' | 'failed';
+
+export type AlertRecord = {
+  id: string;
+  at: number;
+  direction: AlertDirection;
+  appName: string;
+  packageName: string;
+  title: string;
+  text: string;
+  status: AlertStatus;
+  detail: string;
+};
+
+export type DiagnosticRecord = {
+  id: string;
+  at: number;
+  message: string;
+};
+
 export type NativeState = {
   role: DeviceRole | null;
   paired: boolean;
   notificationAccess: boolean;
+  listenerConnected: boolean;
   sensitiveContentLimited: boolean;
   selectedPackages: string[];
   pairedAt: number | null;
@@ -33,6 +55,9 @@ export type NativeState = {
 declare class NotifierNativeModule extends NativeModule {
   configure(relayUrl: string, firebaseConfig: FirebaseConfig): Promise<void>;
   getState(): Promise<NativeState>;
+  syncPairing(): Promise<NativeState>;
+  getAlerts(): Promise<AlertRecord[]>;
+  getDiagnostics(): Promise<DiagnosticRecord[]>;
   getInstalledApps(): Promise<InstalledApp[]>;
   getAppIcon(packageName: string): Promise<string>;
   openNotificationAccessSettings(): void;

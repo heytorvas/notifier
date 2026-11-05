@@ -78,12 +78,12 @@ On a first run it:
 2. Enables `fcm.googleapis.com`.
 3. Creates the `notifier-relay` service account and grants only `roles/firebasecloudmessaging.admin`.
 4. Creates a JSON key in a temporary directory outside the repository, uploads `FIREBASE_CLIENT_EMAIL` and `FIREBASE_PRIVATE_KEY` as Worker secrets, and deletes the key file.
-5. Creates D1 database `notifier-relay` when `relay/wrangler.toml` still has the placeholder database id, writes that id and the Firebase project id into the file, and applies the remote migrations.
+5. Creates D1 database `notifier-relay` when `relay/.env` has no database id and `relay/wrangler.toml` still has the placeholder, writes `CLOUDFLARE_D1_DATABASE_ID` and `FIREBASE_PROJECT_ID` to the gitignored `relay/.env`, and applies the remote migrations.
 6. Deploys the Worker and requires `{"status":"ok"}` from `https://…/health`.
 7. Writes the five public `EXPO_PUBLIC_*` values to `.env`.
 8. Copies those same values into the EAS `preview` environment.
 
-`.env` is gitignored. The service-account private key is never written there, into `app.json`, or into Worker `[vars]`.
+`.env` and `relay/.env` are gitignored. The committed `app.json` and `wrangler.toml` keep placeholders. `app.config.ts` and `npm --prefix relay run deploy` apply the env values at build and deploy time. The service-account private key is never written into either env file, `app.json`, or Worker `[vars]`.
 
 Useful flags:
 
@@ -274,7 +274,8 @@ correcting the project, then rebuild.
 
 ### Pairing works but messages do not arrive
 
-- Confirm the tablet dashboard reports notification access as healthy.
+- Confirm the tablet dashboard says Connected. Reconnecting means Android still has notification access enabled, but the listener service is not bound; the activity log shows the rebind attempt.
+- Open Activity on the dashboard. It records listener, relay, and delivery failures without notification text.
 - Confirm the source app is selected.
 - Confirm the phone granted notification permission and did not disable the mirrored-notifications
   channel.

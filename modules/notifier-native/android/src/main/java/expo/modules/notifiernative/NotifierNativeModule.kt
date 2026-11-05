@@ -22,11 +22,15 @@ import expo.modules.notifiernative.data.DeviceRole
 import expo.modules.notifiernative.data.NotifierStore
 import expo.modules.notifiernative.data.PairingPayloadParser
 import expo.modules.notifiernative.data.PairingState
-import expo.modules.notifiernative.data.PendingCleanup
 import expo.modules.notifiernative.network.RelayClient
 import expo.modules.notifiernative.notifications.CleanupWorker
+import expo.modules.notifiernative.notifications.DeviceJournal
 import expo.modules.notifiernative.notifications.IconStore
+import expo.modules.notifiernative.notifications.ListenerBinding
 import expo.modules.notifiernative.notifications.ListenerConnectionState
+import expo.modules.notifiernative.notifications.ListenerRecovery
+import expo.modules.notifiernative.notifications.MaintenanceWorker
+import expo.modules.notifiernative.notifications.PairingSync
 import expo.modules.notifiernative.notifications.ProfileSyncWorker
 import expo.modules.notifiernative.security.CryptoStore
 import expo.modules.kotlin.modules.Module
@@ -52,32 +56,40 @@ class NotifierNativeModule : Module() {
       initializeFirebase(context, applicationId, apiKey, projectId, senderId)
       CleanupWorker.enqueue(context)
       ProfileSyncWorker.enqueue(context)
+      MaintenanceWorker.enqueue(context)
     }
 
-    AsyncFunction("getState") {
-      val context = requireContext()
-      val store = NotifierStore(context)
-      val pairing = store.pairingState
-      mapOf(
-        "role" to pairing?.role?.value,
-        "paired" to (
-          pairing?.isComplete == true &&
-            (pairing.role != DeviceRole.RECEIVER || pairing.receiverClaimed)
-          ),
-        "notificationAccess" to if (pairing?.role == DeviceRole.RECEIVER) {
-          canPostNotifications(context)
-        } else {
-          hasNotificationAccess(context) && ListenerConnectionState.connected
-        },
-        "sensitiveContentLimited" to (
-          pairing?.role == DeviceRole.TRANSMITTER &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
-          ),
-        "selectedPackages" to store.selectedPackages.toList(),
-        "pairedAt" to store.pairedAt,
-        "peer" to peer(store),
-        "transmittingApps" to transmittingApps(context, store),
-      )
+    AsyncFunction("getState") { stateMap() }
+
+    AsyncFunction("syncPairing") {
+      PairingSync.refresh(requireContext())
+      stateMap()
+    }
+
+    AsyncFunction("getAlerts") {
+      DeviceJournal(requireContext()).alerts().map { record ->
+        mapOf(
+          "id" to record.id,
+          "at" to record.at.toDouble(),
+          "direction" to record.direction,
+          "appName" to record.appName,
+          "packageName" to record.packageName,
+          "title" to record.title,
+          "text" to record.text,
+          "status" to record.status,
+          "detail" to record.detail,
+        )
+      }
+    }
+
+    AsyncFunction("getDiagnostics") {
+      DeviceJournal(requireContext()).diagnostics().map { record ->
+        mapOf(
+          "id" to record.id,
+          "at" to record.at.toDouble(),
+          "message" to record.message,
+        )
+      }
     }
 
     AsyncFunction("getInstalledApps") {
@@ -199,26 +211,43 @@ class NotifierNativeModule : Module() {
     }
 
     AsyncFunction("resetPairing") {
-      val store = NotifierStore(requireContext())
-      val pairing = store.pairingState
-      val relayUrl = store.relayUrl
-      if (
-        pairing?.role == DeviceRole.RECEIVER &&
-        relayUrl != null &&
-        pairing.ownerToken != null
-      ) {
-        store.savePendingCleanup(
-          PendingCleanup(
-            relayUrl = relayUrl,
-            inboxId = pairing.inboxId,
-            ownerToken = pairing.ownerToken,
-          ),
-        )
-      }
-      store.clearPairing()
-      IconStore(requireContext()).clear()
+      PairingSync.requestUnpair(requireContext())
       CleanupWorker.enqueue(requireContext())
     }
+  }
+
+  private fun stateMap(): Map<String, Any?> {
+    val context = requireContext()
+    val store = NotifierStore(context)
+    val pairing = store.pairingState
+    val permission = if (pairing?.role == DeviceRole.RECEIVER) {
+      canPostNotifications(context)
+    } else {
+      hasNotificationAccess(context)
+    }
+    if (pairing?.role == DeviceRole.TRANSMITTER) ListenerRecovery.rebindIfNeeded(context)
+    val listenerConnected = ListenerBinding.listenerConnected(
+      isTransmitter = pairing?.role == DeviceRole.TRANSMITTER,
+      permissionGranted = permission,
+      serviceConnected = ListenerConnectionState.connected,
+    )
+    return mapOf(
+      "role" to pairing?.role?.value,
+      "paired" to (
+        pairing?.isComplete == true &&
+          (pairing.role != DeviceRole.RECEIVER || pairing.receiverClaimed)
+        ),
+      "notificationAccess" to permission,
+      "listenerConnected" to listenerConnected,
+      "sensitiveContentLimited" to (
+        pairing?.role == DeviceRole.TRANSMITTER &&
+          Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+        ),
+      "selectedPackages" to store.selectedPackages.toList(),
+      "pairedAt" to store.pairedAt,
+      "peer" to peer(store),
+      "transmittingApps" to transmittingApps(context, store),
+    )
   }
 
   private fun peer(store: NotifierStore): Map<String, String>? {

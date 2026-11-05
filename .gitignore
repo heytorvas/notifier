@@ -43,10 +43,12 @@ yarn-error.*
 /ios
 /android
 
-# Cloudflare Worker build output
+# Cloudflare Worker build output and local deployment values
 /relay/dist/
 /relay/.wrangler/
 /relay/.wrangler-test.log
+/relay/.env
+/relay/.wrangler.local.toml
 
 # local editor
 .cursor/

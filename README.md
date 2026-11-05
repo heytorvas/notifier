@@ -96,5 +96,18 @@ npm run relay:test
 Native compilation and real delivery require the additional release checks in
 [`docs/DEVICE_TEST_MATRIX.md`](docs/DEVICE_TEST_MATRIX.md).
 
-The receiver intentionally has no notification history. Android owns displayed notifications, and
-the app does not retain their plaintext.
+Each device keeps the newest 400 alerts it sent or received, including failures, until you unpair. The list
+stays on that device and is encrypted with the Android Keystore. Unpairing either device removes
+the pairing from both. The dashboard activity log records listener, relay, and delivery problems
+without notification text or credentials.
+
+## Self-hosting
+
+The committed configuration uses placeholders. Put the real values in gitignored env files:
+
+- `.env` for `EXPO_PUBLIC_*`, `EAS_PROJECT_ID`, `EXPO_PUBLIC_UPDATES_URL`, and `EXPO_OWNER`
+- `relay/.env` for `CLOUDFLARE_D1_DATABASE_ID` and `FIREBASE_PROJECT_ID`
+
+`npm run setup:providers` writes those files. Deploy the worker with `npm --prefix relay run deploy`.
+Do not commit `.env`, `relay/.env`, or `relay/.wrangler.local.toml`. The service-account private key
+belongs only in a Wrangler secret.

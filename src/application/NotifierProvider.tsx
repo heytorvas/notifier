@@ -12,6 +12,8 @@ import { AppState } from 'react-native';
 import { readEnvironment } from '../config/environment';
 import {
   notifierGateway,
+  type AlertRecord,
+  type DiagnosticRecord,
   type InstalledApp,
   type NativeState,
 } from '../infrastructure/notifierGateway';
@@ -19,12 +21,15 @@ import {
 type NotifierContextValue = {
   state?: NativeState;
   apps: InstalledApp[];
+  alerts: AlertRecord[];
+  diagnostics: DiagnosticRecord[];
   pairingCode?: string;
   busy: boolean;
   initialized: boolean;
   startupError?: string;
   retryStartup: () => void;
   refreshState: () => Promise<NativeState>;
+  syncPeer: () => Promise<NativeState>;
   loadApps: () => Promise<void>;
   prepareReceiver: () => Promise<void>;
   pairTransmitter: (code: string) => Promise<void>;
@@ -37,17 +42,35 @@ const NotifierContext = createContext<NotifierContextValue | null>(null);
 export function NotifierProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<NativeState>();
   const [apps, setApps] = useState<InstalledApp[]>([]);
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticRecord[]>([]);
   const [pairingCode, setPairingCode] = useState<string>();
   const [busy, setBusy] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [startupError, setStartupError] = useState<string>();
   const [startupAttempt, setStartupAttempt] = useState(0);
 
+  const refreshActivity = useCallback(async () => {
+    const [nextAlerts, nextDiagnostics] = await Promise.all([
+      notifierGateway.getAlerts(),
+      notifierGateway.getDiagnostics(),
+    ]);
+    setAlerts(nextAlerts);
+    setDiagnostics(nextDiagnostics);
+  }, []);
+
   const refreshState = useCallback(async () => {
     const next = await notifierGateway.getState();
     setState(next);
     return next;
   }, []);
+
+  const syncPeer = useCallback(async () => {
+    const next = await notifierGateway.syncPairing();
+    setState(next);
+    await refreshActivity();
+    return next;
+  }, [refreshActivity]);
 
   const loadApps = useCallback(async () => {
     setApps(await notifierGateway.getInstalledApps());
@@ -84,12 +107,11 @@ export function NotifierProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (next) => {
-      if (next === 'active' && state?.role) {
-        void refreshState().catch(() => undefined);
-      }
+      if (next !== 'active' || !state?.role) return;
+      void (state.paired ? syncPeer() : refreshState()).catch(() => undefined);
     });
     return () => subscription.remove();
-  }, [refreshState, state?.role]);
+  }, [refreshState, state?.paired, state?.role, syncPeer]);
 
   const runBusy = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
     setBusy(true);
@@ -104,12 +126,15 @@ export function NotifierProvider({ children }: PropsWithChildren) {
     () => ({
       state,
       apps,
+      alerts,
+      diagnostics,
       pairingCode,
       busy,
       initialized,
       startupError,
       retryStartup: () => setStartupAttempt((attempt) => attempt + 1),
       refreshState,
+      syncPeer,
       loadApps,
       prepareReceiver: () =>
         runBusy(async () => {
@@ -132,16 +157,21 @@ export function NotifierProvider({ children }: PropsWithChildren) {
           setState(await notifierGateway.getState());
           setPairingCode(undefined);
           setApps([]);
+          setAlerts([]);
+          setDiagnostics([]);
         }),
     }),
     [
+      alerts,
       apps,
       busy,
+      diagnostics,
       initialized,
       loadApps,
       pairingCode,
       refreshState,
       runBusy,
+      syncPeer,
       startupError,
       state,
     ],

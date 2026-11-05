@@ -2,12 +2,12 @@
   "expo": {
     "name": "Notifier",
     "slug": "notifier",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/bb2009e4-8e0c-47ff-9ad0-9a94c1aece50",
+      "url": "https://u.expo.dev/00000000-0000-0000-0000-000000000000",
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0
     },
@@ -19,7 +19,7 @@
     "android": {
       "backgroundColor": "#000000",
       "package": "dev.heytor.notifier",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
@@ -83,9 +83,9 @@
         }
       },
       "eas": {
-        "projectId": "bb2009e4-8e0c-47ff-9ad0-9a94c1aece50"
+        "projectId": "00000000-0000-0000-0000-000000000000"
       }
     },
-    "owner": "heytorvas"
+    "owner": "your-expo-account"
   }
 }

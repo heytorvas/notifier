@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/deploy.mjs deploy",
+    "migrate": "node scripts/deploy.mjs d1 migrations apply notifier-relay --remote",
     "dev": "wrangler dev",
     "typecheck": "tsc --noEmit",
     "test": "WRANGLER_LOG_PATH=.wrangler-test.log vitest run"

@@ -1,5 +1,12 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 
+import {
+  alertStatusLabel,
+  byRecent,
+  connectionStatus,
+  type AlertRecord,
+  type DiagnosticRecord,
+} from '../../domain/activity';
 import { formatDeviceName, formatPairedAt } from '../../domain/devices';
 import type { DeviceRole, InstalledApp, PeerDevice } from '../../infrastructure/notifierGateway';
 import { AppIcon } from '../components/AppIcon';
@@ -12,10 +19,13 @@ import { colors, radius, spacing } from '../theme';
 type Props = {
   role: DeviceRole;
   notificationAccess: boolean;
+  listenerConnected: boolean;
   sensitiveContentLimited: boolean;
   peer: PeerDevice | null;
   pairedAt: number | null;
   apps: InstalledApp[];
+  alerts: AlertRecord[];
+  diagnostics: DiagnosticRecord[];
   onEditApps: () => void;
   onFixPermission: () => void;
   onReset: () => void;
@@ -24,10 +34,13 @@ type Props = {
 export function DashboardScreen({
   role,
   notificationAccess,
+  listenerConnected,
   sensitiveContentLimited,
   peer,
   pairedAt,
   apps,
+  alerts,
+  diagnostics,
   onEditApps,
   onFixPermission,
   onReset,
@@ -35,6 +48,9 @@ export function DashboardScreen({
   const deviceName = peer ? formatDeviceName(peer.brand, peer.model) : '';
   const pairedLabel = formatPairedAt(pairedAt);
   const sending = role === 'transmitter';
+  const connection = connectionStatus(role, notificationAccess, listenerConnected);
+  const recentAlerts = byRecent(alerts);
+  const recentDiagnostics = byRecent(diagnostics);
 
   return (
     <View style={styles.container}>
@@ -51,13 +67,21 @@ export function DashboardScreen({
       <ScrollView contentContainerStyle={styles.body}>
         <View style={styles.card}>
           <View style={styles.status}>
-            <View style={[styles.dot, notificationAccess ? styles.dotOn : styles.dotOff]} />
-            <AppText weight="medium">{notificationAccess ? 'Connected' : 'Access off'}</AppText>
+            <View style={[styles.dot, connection === 'connected' ? styles.dotOn : styles.dotOff]} />
+            <AppText weight="medium">{connectionLabel[connection]}</AppText>
           </View>
+          {connection === 'reconnecting' ? <AppText tone="faint">{reconnectingHint}</AppText> : null}
+          {connection === 'reconnecting' ? (
+            <TextAction
+              accessibilityLabel="Notification access"
+              label="Notification access"
+              onPress={onFixPermission}
+            />
+          ) : null}
           {sensitiveContentLimited ? (
             <AppText tone="faint">Android may redact some alerts.</AppText>
           ) : null}
-          {!notificationAccess ? <PrimaryButton label="Allow access" onPress={onFixPermission} /> : null}
+          {connection === 'access-off' ? <PrimaryButton label="Allow access" onPress={onFixPermission} /> : null}
         </View>
 
         {deviceName ? (
@@ -91,6 +115,57 @@ export function DashboardScreen({
           )}
         </View>
 
+        <View style={styles.card}>
+          <AppText weight="medium">Alerts</AppText>
+          <ScrollView nestedScrollEnabled style={styles.fixedList}>
+            {recentAlerts.length === 0 ? (
+              <AppText tone="faint">No alerts yet</AppText>
+            ) : (
+              recentAlerts.map((alert) => {
+                const when = formatPairedAt(alert.at);
+                const status = [alertStatusLabel(alert.direction, alert.status), alert.detail, when]
+                  .filter((part): part is string => Boolean(part))
+                  .join(' · ');
+                return (
+                  <View key={alert.id} style={styles.alertRow}>
+                    <AppIcon packageName={alert.packageName} />
+                    <View style={styles.alertCopy}>
+                      <AppText numberOfLines={1} weight="medium">
+                        {alert.appName || 'Alert'}
+                      </AppText>
+                      {alert.title ? <AppText numberOfLines={2}>{alert.title}</AppText> : null}
+                      {alert.text ? (
+                        <AppText numberOfLines={3} tone="muted">
+                          {alert.text}
+                        </AppText>
+                      ) : null}
+                      <AppText tone={alert.status === 'failed' ? 'danger' : 'faint'}>{status}</AppText>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+
+        <View style={styles.card}>
+          <AppText weight="medium">Activity</AppText>
+          <ScrollView nestedScrollEnabled style={styles.fixedList}>
+            {recentDiagnostics.length === 0 ? (
+              <AppText tone="faint">No activity yet</AppText>
+            ) : (
+              recentDiagnostics.map((entry) => (
+                <View key={entry.id} style={styles.activityRow}>
+                  <AppText tone="muted">{entry.message}</AppText>
+                  {formatPairedAt(entry.at) ? (
+                    <AppText tone="faint">{formatPairedAt(entry.at)}</AppText>
+                  ) : null}
+                </View>
+              ))
+            )}
+          </ScrollView>
+        </View>
+
         <View style={styles.unpair}>
           <PrimaryButton label="Unpair" onPress={onReset} variant="danger" />
         </View>
@@ -98,6 +173,15 @@ export function DashboardScreen({
     </View>
   );
 }
+
+const reconnectingHint =
+  'Android already allows notification access. If this stays, turn Notifier off and on in notification access.';
+
+const connectionLabel = {
+  connected: 'Connected',
+  'access-off': 'Access off',
+  reconnecting: 'Reconnecting',
+} as const;
 
 const styles = StyleSheet.create({
   container: {
@@ -172,6 +256,23 @@ const styles = StyleSheet.create({
   },
   appName: {
     flex: 1,
+  },
+  alertCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  alertRow: {
+    alignItems: 'flex-start',
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  fixedList: {
+    height: 220,
+  },
+  activityRow: {
+    gap: 2,
+    paddingVertical: spacing.sm,
   },
   unpair: {
     marginTop: spacing.sm,

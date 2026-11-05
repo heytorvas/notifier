@@ -1,5 +1,7 @@
 import NotifierNative, {
+  type AlertRecord,
   type DeviceRole,
+  type DiagnosticRecord,
   type FirebaseConfig,
   type InstalledApp,
   type NativeState,
@@ -7,7 +9,7 @@ import NotifierNative, {
 } from '../../modules/notifier-native/src/NotifierNativeModule';
 import { BoundedCache } from './boundedCache';
 
-export type { DeviceRole, InstalledApp, NativeState, PeerDevice };
+export type { AlertRecord, DeviceRole, DiagnosticRecord, InstalledApp, NativeState, PeerDevice };
 
 const iconCache = new BoundedCache<Promise<string>>(64);
 
@@ -17,6 +19,15 @@ export const notifierGateway = {
   },
   getState(): Promise<NativeState> {
     return NotifierNative.getState();
+  },
+  syncPairing(): Promise<NativeState> {
+    return NotifierNative.syncPairing();
+  },
+  getAlerts(): Promise<AlertRecord[]> {
+    return NotifierNative.getAlerts();
+  },
+  getDiagnostics(): Promise<DiagnosticRecord[]> {
+    return NotifierNative.getDiagnostics();
   },
   getInstalledApps(): Promise<InstalledApp[]> {
     return NotifierNative.getInstalledApps();

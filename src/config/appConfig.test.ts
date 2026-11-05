@@ -46,7 +46,11 @@ describe('Android app configuration', () => {
 
   it('ships an ARM release that can update JavaScript without a new install', () => {
     expect(appConfig.expo.runtimeVersion).toEqual({ policy: 'appVersion' });
-    expect(appConfig.expo.updates.url).toBe('https://u.expo.dev/bb2009e4-8e0c-47ff-9ad0-9a94c1aece50');
+    expect(appConfig.expo.updates.url).toBe(
+      'https://u.expo.dev/00000000-0000-0000-0000-000000000000',
+    );
+    expect(appConfig.expo.extra.eas.projectId).toBe('00000000-0000-0000-0000-000000000000');
+    expect(appConfig.expo.owner).toBe('your-expo-account');
     const buildProperties = appConfig.expo.plugins.find(
       (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-build-properties',
     );

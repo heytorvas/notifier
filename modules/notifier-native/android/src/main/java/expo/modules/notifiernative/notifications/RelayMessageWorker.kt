@@ -24,8 +24,13 @@ internal class RelayMessageWorker(
     val expectedInboxId = inputData.getString(KEY_INBOX_ID) ?: return Result.failure()
     val nonce = inputData.getString(KEY_NONCE) ?: return Result.failure()
     val ciphertext = inputData.getString(KEY_CIPHERTEXT) ?: return Result.failure()
+    val journal = DeviceJournal(applicationContext)
     val expiresAt = inputData.getLong(KEY_EXPIRES_AT, 0)
     if (expiresAt <= 0 || DeliveryPolicy.isExpired(System.currentTimeMillis(), expiresAt)) {
+      journal.quietly {
+        markAlert(messageId, "failed", "Expired before delivery")
+        addDiagnostic("Alert expired before delivery")
+      }
       return Result.success()
     }
 
@@ -45,17 +50,32 @@ internal class RelayMessageWorker(
         nonce,
         ciphertext,
       )
-      Result.success()
-    }.getOrElse { error ->
-      if (
-        error is RelayClient.RelayException &&
-        !DeliveryPolicy.shouldRetry(error.statusCode)
-      ) {
-        Result.failure()
-      } else {
-        Result.retry()
-      }
-    }
+    }.fold(
+      onSuccess = {
+        journal.quietly { markAlert(messageId, "delivered", "") }
+        Result.success()
+      },
+      onFailure = { error ->
+        val relayError = error as? RelayClient.RelayException
+        when (DeliveryPolicy.sendFailure(relayError?.statusCode, relayError?.message)) {
+          DeliveryPolicy.SendFailure.UNPAIRED -> {
+            PairingSync.forgetPeer(applicationContext)
+            Result.success()
+          }
+          DeliveryPolicy.SendFailure.REJECTED -> {
+            journal.quietly {
+              markAlert(messageId, "failed", "Relay rejected the alert")
+              addDiagnostic("Relay rejected an alert (${relayError?.statusCode})")
+            }
+            Result.failure()
+          }
+          DeliveryPolicy.SendFailure.RETRY -> {
+            journal.quietly { markAlert(messageId, "pending", "Waiting to retry") }
+            Result.retry()
+          }
+        }
+      },
+    )
   }
 
   companion object {

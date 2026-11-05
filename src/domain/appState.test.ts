@@ -5,6 +5,7 @@ const base: NativeState = {
   role: null,
   paired: false,
   notificationAccess: false,
+  listenerConnected: false,
   sensitiveContentLimited: false,
   selectedPackages: [],
   pairedAt: null,

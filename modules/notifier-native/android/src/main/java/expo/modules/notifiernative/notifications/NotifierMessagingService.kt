@@ -19,29 +19,41 @@ import expo.modules.notifiernative.data.RemoteAppRecord
 import expo.modules.notifiernative.security.CryptoStore
 
 class NotifierMessagingService : FirebaseMessagingService() {
+  override fun onCreate() {
+    super.onCreate()
+    runCatching { MaintenanceWorker.enqueue(this) }
+  }
+
   override fun onMessageReceived(message: RemoteMessage) {
     val store = NotifierStore(applicationContext)
     val pairing = store.pairingState ?: return
     if (pairing.role != DeviceRole.RECEIVER) return
-    val key = runCatching { CryptoStore.decode(pairing.pairingKey) }.getOrNull() ?: return
+    val journal = DeviceJournal(applicationContext)
     val nonce = message.data["nonce"] ?: return
     val ciphertext = message.data["ciphertext"] ?: return
     val messageId = message.data["messageId"] ?: return
-
-    val encoded = runCatching {
-      CryptoStore.decryptPayload(key, nonce, ciphertext)
-    }.getOrNull() ?: return
-    when (val payload = MirroredPayload.parse(encoded)) {
-      is MirroredPayload.Alert -> {
-        if (
-          payload.postedAt <= 0 ||
-          DeliveryPolicy.isExpired(System.currentTimeMillis(), payload.postedAt + DELIVERY_TTL_MS)
-        ) return
-        postNotification(payload, messageId)
+    val key = runCatching { CryptoStore.decode(pairing.pairingKey) }.getOrNull()
+    val encoded = key?.let { runCatching { CryptoStore.decryptPayload(it, nonce, ciphertext) }.getOrNull() }
+    if (encoded == null) {
+      journal.quietly {
+        upsertAlert(incomingFailure(messageId, "Could not decrypt"))
+        addDiagnostic("Could not decrypt an alert")
       }
+      return
+    }
+    when (val payload = MirroredPayload.parse(encoded)) {
+      is MirroredPayload.Alert -> deliverAlert(journal, payload, messageId)
       is MirroredPayload.Icon -> storeIcon(payload)
-      is MirroredPayload.Profile -> storeProfile(payload)
-      null -> return
+      is MirroredPayload.Profile -> {
+        storeProfile(payload)
+        journal.quietly { addDiagnostic("Updated the other device") }
+      }
+      null -> {
+        journal.quietly {
+          upsertAlert(incomingFailure(messageId, "Unrecognized alert"))
+          addDiagnostic("Dropped an unrecognized alert")
+        }
+      }
     }
   }
 
@@ -49,13 +61,68 @@ class NotifierMessagingService : FirebaseMessagingService() {
     val store = NotifierStore(applicationContext)
     store.registrationId = installationId
     RegistrationWorker.enqueue(applicationContext)
+    DeviceJournal(applicationContext).quietly { addDiagnostic("Registration updated") }
   }
 
   override fun onDeletedMessages() {
     if (NotifierStore(applicationContext).pairingState?.role == DeviceRole.RECEIVER) {
+      DeviceJournal(applicationContext).quietly { addDiagnostic("Firebase discarded queued alerts") }
       postDeliveryWarning()
     }
   }
+
+  private fun deliverAlert(journal: DeviceJournal, payload: MirroredPayload.Alert, messageId: String) {
+    if (
+      payload.postedAt <= 0 ||
+      DeliveryPolicy.isExpired(System.currentTimeMillis(), payload.postedAt + DELIVERY_TTL_MS)
+    ) {
+      journal.quietly {
+        upsertAlert(payload.record(messageId, "failed", "Expired"))
+        addDiagnostic("Dropped an expired alert")
+      }
+      return
+    }
+    if (
+      ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+      PackageManager.PERMISSION_GRANTED
+    ) {
+      journal.quietly {
+        upsertAlert(payload.record(messageId, "failed", "Notifications are blocked"))
+        addDiagnostic("Could not post an alert: notifications are blocked")
+      }
+      return
+    }
+    postNotification(payload, messageId)
+    journal.quietly { upsertAlert(payload.record(messageId, "delivered", "")) }
+  }
+
+  private fun incomingFailure(messageId: String, detail: String): AlertRecord =
+    AlertRecord(
+      id = messageId,
+      at = System.currentTimeMillis(),
+      direction = "in",
+      appName = "",
+      packageName = "",
+      title = "",
+      text = "",
+      status = "failed",
+      detail = detail,
+    )
+
+  private fun MirroredPayload.Alert.record(messageId: String, status: String, detail: String): AlertRecord =
+    AlertRecord(
+      id = messageId,
+      at = postedAt.takeIf { it > 0 } ?: System.currentTimeMillis(),
+      direction = "in",
+      appName = appName,
+      packageName = packageName,
+      title = title,
+      text = detailText(),
+      status = status,
+      detail = detail,
+    )
+
+  private fun MirroredPayload.Alert.detailText(): String = detail.ifBlank { summary }
 
   private fun storeIcon(payload: MirroredPayload.Icon) {
     val bytes = runCatching { Base64.decode(payload.imageBase64, Base64.DEFAULT) }.getOrNull() ?: return

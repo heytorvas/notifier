@@ -17,25 +17,27 @@ internal class CryptoStore(context: Context) {
     context.getSharedPreferences("notifier_secure_preferences", Context.MODE_PRIVATE)
 
   fun put(key: String, value: String) {
-    val cipher = Cipher.getInstance(TRANSFORMATION)
-    cipher.init(Cipher.ENCRYPT_MODE, wrappingKey())
-    val encrypted = cipher.doFinal(value.toByteArray(Charsets.UTF_8))
-    check(preferences.edit()
-      .putString(key, "${encode(cipher.iv)}:${encode(encrypted)}")
-      .commit()) { "Could not persist encrypted state." }
+    check(preferences.edit().putString(key, seal(value)).commit()) {
+      "Could not persist encrypted state."
+    }
   }
 
-  fun get(key: String): String? {
-    val encoded = preferences.getString(key, null) ?: return null
-    return try {
-      val parts = encoded.split(':', limit = 2)
-      require(parts.size == 2)
-      val cipher = Cipher.getInstance(TRANSFORMATION)
-      cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), GCMParameterSpec(TAG_BITS, decode(parts[0])))
-      String(cipher.doFinal(decode(parts[1])), Charsets.UTF_8)
-    } catch (_: Exception) {
-      null
-    }
+  fun get(key: String): String? = preferences.getString(key, null)?.let(::open)
+
+  fun seal(value: String): String {
+    val cipher = Cipher.getInstance(TRANSFORMATION)
+    cipher.init(Cipher.ENCRYPT_MODE, wrappingKey())
+    return "${encode(cipher.iv)}:${encode(cipher.doFinal(value.toByteArray(Charsets.UTF_8)))}"
+  }
+
+  fun open(sealed: String): String? = try {
+    val parts = sealed.split(':', limit = 2)
+    require(parts.size == 2)
+    val cipher = Cipher.getInstance(TRANSFORMATION)
+    cipher.init(Cipher.DECRYPT_MODE, wrappingKey(), GCMParameterSpec(TAG_BITS, decode(parts[0])))
+    String(cipher.doFinal(decode(parts[1])), Charsets.UTF_8)
+  } catch (_: Exception) {
+    null
   }
 
   fun remove(key: String) {

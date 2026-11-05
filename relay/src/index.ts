@@ -29,6 +29,7 @@ const JSON_HEADERS = {
 };
 const MAX_BODY_BYTES = 8_192;
 const CAPABILITY_PATTERN = /^[A-Za-z0-9_-]{32,512}$/;
+const DUMMY_TOKEN_HASH = '00'.repeat(32);
 const FID_PATTERN = /^[A-Za-z0-9_-]{20,128}$/;
 const ENCODED_PATTERN = /^[A-Za-z0-9_-]+$/;
 const MESSAGE_ID_PATTERN =
@@ -91,6 +92,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     return claimInbox(request, env, claimMatch[1]);
   }
 
+  const unpairMatch = url.pathname.match(/^\/v1\/inboxes\/([0-9a-f-]+)\/unpair$/);
+  if (request.method === 'POST' && unpairMatch?.[1]) {
+    return unpairInbox(request, env, unpairMatch[1]);
+  }
+
   const messageMatch = url.pathname.match(/^\/v1\/inboxes\/([0-9a-f-]+)\/messages$/);
   if (request.method === 'POST' && messageMatch?.[1]) {
     return sendMessage(request, env, messageMatch[1]);
@@ -107,9 +113,16 @@ async function route(request: Request, env: Env): Promise<Response> {
   throw new HttpError(404, 'Not found.');
 }
 
+async function unpairInbox(request: Request, env: Env, inboxId: string): Promise<Response> {
+  const inbox = await requireInbox(env, inboxId);
+  await authorizeAny(request, [inbox.owner_token_hash, inbox.sender_token_hash]);
+  await env.DB.prepare('DELETE FROM inboxes WHERE id = ?').bind(inboxId).run();
+  return new Response(null, { status: 204, headers: JSON_HEADERS });
+}
+
 async function pairingStatus(request: Request, env: Env, inboxId: string): Promise<Response> {
   const inbox = await requireInbox(env, inboxId);
-  await authorize(request, inbox.owner_token_hash);
+  await authorizeAny(request, [inbox.owner_token_hash, inbox.sender_token_hash]);
   const timing = await env.DB.prepare('SELECT claimed_at FROM inboxes WHERE id = ?')
     .bind(inboxId)
     .first<{ claimed_at: number | null }>();
@@ -292,21 +305,29 @@ async function requireInbox(env: Env, inboxId: string): Promise<Inbox> {
 }
 
 async function authorize(request: Request, expectedHash: string | null): Promise<void> {
-  if (!expectedHash) throw new HttpError(409, 'Capability is no longer active.');
+  await authorizeAny(request, [expectedHash]);
+}
+
+async function authorizeAny(request: Request, hashes: Array<string | null>): Promise<void> {
+  if (!hashes.some((candidate) => candidate)) throw new HttpError(409, 'Capability is no longer active.');
   const authorization = request.headers.get('authorization');
   if (!authorization?.startsWith('Bearer ')) throw new HttpError(401, 'Unauthorized.');
   const token = authorization.slice(7);
-  if (!CAPABILITY_PATTERN.test(token) || !(await hashesMatch(token, expectedHash))) {
-    throw new HttpError(401, 'Unauthorized.');
+  if (!CAPABILITY_PATTERN.test(token)) throw new HttpError(401, 'Unauthorized.');
+  const actual = hexToBytes(await hash(token));
+  let matched = false;
+  for (const candidate of hashes) {
+    const expectedHex =
+      typeof candidate === 'string' && /^[0-9a-f]{64}$/.test(candidate) ? candidate : DUMMY_TOKEN_HASH;
+    if (fixedTimeEquals(actual, hexToBytes(expectedHex))) matched = true;
   }
+  if (!matched) throw new HttpError(401, 'Unauthorized.');
 }
 
-async function hashesMatch(token: string, expectedHash: string): Promise<boolean> {
-  if (!/^[0-9a-f]{64}$/.test(expectedHash)) return false;
-  const actual = hexToBytes(await hash(token));
-  const expected = hexToBytes(expectedHash);
-  let mismatch = 0;
-  for (let index = 0; index < actual.length; index += 1) {
+function fixedTimeEquals(actual: Uint8Array, expected: Uint8Array): boolean {
+  let mismatch = actual.length === expected.length ? 0 : 1;
+  const length = Math.max(actual.length, expected.length);
+  for (let index = 0; index < length; index += 1) {
     mismatch |= (actual[index] ?? 0) ^ (expected[index] ?? 0);
   }
   return mismatch === 0;

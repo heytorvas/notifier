@@ -14,12 +14,16 @@ describe('web notifier gateway', () => {
       role: null,
       paired: false,
       notificationAccess: false,
+      listenerConnected: false,
       sensitiveContentLimited: false,
       selectedPackages: [],
       pairedAt: null,
       peer: null,
       transmittingApps: [],
     });
+    await expect(notifierGateway.syncPairing()).resolves.toEqual(await notifierGateway.getState());
+    await expect(notifierGateway.getAlerts()).resolves.toEqual([]);
+    await expect(notifierGateway.getDiagnostics()).resolves.toEqual([]);
     await expect(notifierGateway.getInstalledApps()).resolves.toEqual([]);
     await expect(notifierGateway.prepareReceiver()).resolves.toBe('');
     await expect(notifierGateway.pairTransmitter('code')).resolves.toBeUndefined();

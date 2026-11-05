@@ -21,16 +21,22 @@ internal class CleanupWorker(
     val store = NotifierStore(applicationContext)
     val cleanup = store.pendingCleanup ?: return Result.success()
     return runCatching {
-      RelayClient(cleanup.relayUrl).deleteInbox(cleanup.inboxId, cleanup.ownerToken)
+      RelayClient(cleanup.relayUrl).unpair(cleanup.inboxId, cleanup.token)
       store.clearPendingCleanup()
       Result.success()
     }.getOrElse { error ->
-      if (
-        error is RelayClient.RelayException &&
-        !DeliveryPolicy.shouldRetry(error.statusCode)
-      ) {
+      if (error is RelayClient.RelayException && DeliveryPolicy.isInboxMissing(error.statusCode, error.message)) {
         store.clearPendingCleanup()
-        if (error.statusCode == 404) Result.success() else Result.failure()
+        Result.success()
+      } else if (
+        error is RelayClient.RelayException &&
+        error.statusCode == 404 &&
+        DeliveryPolicy.retryMissingRoute(runAttemptCount)
+      ) {
+        Result.retry()
+      } else if (error is RelayClient.RelayException && !DeliveryPolicy.shouldRetry(error.statusCode)) {
+        store.clearPendingCleanup()
+        Result.failure()
       } else {
         Result.retry()
       }

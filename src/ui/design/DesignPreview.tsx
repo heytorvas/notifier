@@ -40,6 +40,24 @@ const previewApps = [
 
 const previewPairingCode = 'preview-pairing-code.not-a-real-key.design-only';
 
+const previewAlerts = [
+  {
+    id: 'alert-1',
+    at: 1_700_000_000_000,
+    direction: 'out' as const,
+    appName: 'Example Bank',
+    packageName: 'com.example.bank',
+    title: 'Payment',
+    text: 'A transfer was posted.',
+    status: 'delivered' as const,
+    detail: '',
+  },
+];
+
+const previewDiagnostics = [
+  { id: 'diagnostic-1', at: 1_700_000_000_000, message: 'Listener connected' },
+];
+
 export function DesignPreview() {
   const [screen, setScreen] = useState<ScreenId>('role');
 
@@ -124,7 +142,10 @@ function renderScreen(
   const notificationAccess = screen === 'send-ready' || screen === 'receive-ready' || screen === 'otp-limit';
   return (
     <DashboardScreen
+      alerts={previewAlerts}
       apps={[{ packageName: 'com.example.bank', name: 'Example Bank' }]}
+      diagnostics={previewDiagnostics}
+      listenerConnected={notificationAccess}
       notificationAccess={notificationAccess}
       onEditApps={() => setScreen('apps')}
       onFixPermission={() => setScreen(role === 'transmitter' ? 'send-ready' : 'receive-ready')}

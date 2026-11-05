@@ -136,7 +136,15 @@ test('setup creates missing free-tier resources and keeps the private key out of
   const summary = await setupProviders({ projectId: PROJECT_ID, root: '/repo' }, io);
 
   assert.equal(summary.relayUrl, RELAY_URL);
-  assert.equal(readTomlAssignment(io.files.get('/repo/relay/wrangler.toml'), 'database_id'), DATABASE_ID);
+  assert.equal(
+    readTomlAssignment(io.files.get('/repo/relay/wrangler.toml'), 'database_id'),
+    'replace-with-your-d1-database-id',
+  );
+  const relayEnv = io.files.get('/repo/relay/.env');
+  assert.match(relayEnv, new RegExp(`^CLOUDFLARE_D1_DATABASE_ID=${DATABASE_ID}$`, 'm'));
+  assert.match(relayEnv, new RegExp(`^FIREBASE_PROJECT_ID=${PROJECT_ID}$`, 'm'));
+  assert.match(io.files.get('/repo/relay/.wrangler.local.toml'), new RegExp(`database_id = "${DATABASE_ID}"`));
+  assert.doesNotMatch(io.files.get('/repo/relay/.wrangler.local.toml'), /replace-with-your/);
   const envFile = io.files.get('/repo/.env');
   assert.match(envFile, /EXPO_PUBLIC_FIREBASE_API_KEY=public-android-key/);
   assert.doesNotMatch(envFile, /PRIVATE KEY|gserviceaccount/);

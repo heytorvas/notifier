@@ -5,12 +5,22 @@ import { homedir, tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { renderWranglerConfig } from './relay-config.mjs';
+
 const DATABASE_NAME = 'notifier-relay';
 const SERVICE_ACCOUNT_NAME = 'notifier-relay';
 const FCM_ROLE = 'roles/firebasecloudmessaging.admin';
 const FCM_API = 'fcm.googleapis.com';
+
 const PLACEHOLDER_DATABASE_ID = 'replace-with-your-d1-database-id';
 const PLACEHOLDER_PROJECT_ID = 'replace-with-your-firebase-project-id';
+const PLACEHOLDER_EAS_PROJECT_ID = '00000000-0000-0000-0000-000000000000';
+const DEPLOYMENT_ENV_KEYS = new Set([
+  'CLOUDFLARE_D1_DATABASE_ID',
+  'FIREBASE_PROJECT_ID',
+  'EAS_PROJECT_ID',
+  'EXPO_OWNER',
+]);
 const WORKER_SECRET_NAMES = ['FIREBASE_CLIENT_EMAIL', 'FIREBASE_PRIVATE_KEY'];
 
 const rootDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -117,9 +127,27 @@ export function replaceTomlAssignment(toml, key, value) {
   return toml.replace(pattern, (_match, prefix, suffix) => `${prefix}${value}${suffix}`);
 }
 
+export function readEnvValue(contents, key) {
+  const match = contents.match(new RegExp(`^${key}=(.*)$`, 'm'));
+  const value = match?.[1]?.trim();
+  return value || undefined;
+}
+
+function deploymentValue(envContents, toml, envKey, placeholder) {
+  const fromEnv = readEnvValue(envContents, envKey);
+  if (fromEnv && fromEnv !== placeholder) return fromEnv;
+  const tomlKey = envKey === 'CLOUDFLARE_D1_DATABASE_ID' ? 'database_id' : envKey;
+  try {
+    const fromToml = readTomlAssignment(toml, tomlKey);
+    return fromToml === placeholder ? undefined : fromToml;
+  } catch {
+    return undefined;
+  }
+}
+
 export function mergeEnvFile(existing, updates) {
   for (const key of Object.keys(updates)) {
-    if (!key.startsWith('EXPO_PUBLIC_')) {
+    if (!key.startsWith('EXPO_PUBLIC_') && !DEPLOYMENT_ENV_KEYS.has(key)) {
       throw new Error(`Refusing to write non-public environment key ${key}.`);
     }
   }
@@ -151,10 +179,10 @@ export async function setupProviders(options, io) {
     throw new Error('app.json and wrangler.toml use different Android package names.');
   }
 
-  const configuredProjectId = readTomlAssignment(toml, 'FIREBASE_PROJECT_ID');
-  const requestedProjectId =
-    options.projectId ??
-    (configuredProjectId === PLACEHOLDER_PROJECT_ID ? undefined : configuredProjectId);
+  const relayEnvPath = path.join(root, 'relay', '.env');
+  const relayEnv = await readOptional(io, relayEnvPath);
+  const configuredProjectId = deploymentValue(relayEnv, toml, 'FIREBASE_PROJECT_ID', PLACEHOLDER_PROJECT_ID);
+  const requestedProjectId = options.projectId ?? configuredProjectId;
   if (!requestedProjectId) {
     throw new Error(
       'Pass the Firebase project id:\n  npm run setup:providers -- --project-id your-project-id\nIf that project does not exist yet, the command creates it on the Spark plan.',
@@ -167,11 +195,11 @@ export async function setupProviders(options, io) {
   const androidApp = projectExists
     ? await findExistingAndroidApp(io, root, projectId, packageName)
     : undefined;
-  const databaseIdInFile = readTomlAssignment(toml, 'database_id');
-  const listedDatabaseId =
-    databaseIdInFile === PLACEHOLDER_DATABASE_ID
-      ? await findExistingDatabase(io, root)
-      : databaseIdInFile;
+  const databaseIdInFile = deploymentValue(relayEnv, toml, 'CLOUDFLARE_D1_DATABASE_ID', PLACEHOLDER_DATABASE_ID)
+    ?? (readTomlAssignment(toml, 'database_id') === PLACEHOLDER_DATABASE_ID
+      ? undefined
+      : readTomlAssignment(toml, 'database_id'));
+  const listedDatabaseId = databaseIdInFile ?? (await findExistingDatabase(io, root));
   const accountEmail = serviceAccountEmail(projectId);
   const accountExists = projectExists
     ? await serviceAccountExists(io, projectId, accountEmail)
@@ -272,10 +300,29 @@ export async function setupProviders(options, io) {
     const created = await runChecked(io, wrangler(root, ['d1', 'create', DATABASE_NAME]));
     databaseId = parseDatabaseId(created.stdout);
   }
-  toml = replaceTomlAssignment(toml, 'database_id', databaseId);
-  toml = replaceTomlAssignment(toml, 'FIREBASE_PROJECT_ID', projectId);
-  await io.writeText(wranglerPath, toml);
-  await runChecked(io, wrangler(root, ['d1', 'migrations', 'apply', DATABASE_NAME, '--remote']));
+  await io.writeText(
+    relayEnvPath,
+    mergeEnvFile(relayEnv, {
+      CLOUDFLARE_D1_DATABASE_ID: databaseId,
+      FIREBASE_PROJECT_ID: projectId,
+    }),
+  );
+  await io.writeText(
+    path.join(root, 'relay', '.wrangler.local.toml'),
+    renderWranglerConfig(toml, {
+      CLOUDFLARE_D1_DATABASE_ID: databaseId,
+      FIREBASE_PROJECT_ID: projectId,
+    }),
+  );
+  await runChecked(io, wrangler(root, [
+    'd1',
+    'migrations',
+    'apply',
+    DATABASE_NAME,
+    '--remote',
+    '--config',
+    '.wrangler.local.toml',
+  ]));
 
   let secretsFile;
   let unusedKeyId;
@@ -311,7 +358,12 @@ export async function setupProviders(options, io) {
       );
     }
     io.log('Deploying the relay.');
-    const deployed = await runChecked(io, wrangler(root, ['deploy', ...(secretsFile ? ['--secrets-file', secretsFile] : [])]));
+    const deployed = await runChecked(io, wrangler(root, [
+      'deploy',
+      '--config',
+      '.wrangler.local.toml',
+      ...(secretsFile ? ['--secrets-file', secretsFile] : []),
+    ]));
     unusedKeyId = undefined;
     const relayUrl = parseWorkersUrl(`${deployed.stdout}\n${deployed.stderr}`, workerName);
     const health = await io.fetch(`${relayUrl}/health`);
@@ -384,8 +436,11 @@ export function expoAccountName(text) {
 }
 
 async function ensureEasProject(io, root) {
+  const fromEnv = readEnvValue(await readOptional(io, path.join(root, '.env')), 'EAS_PROJECT_ID');
+  if (fromEnv && fromEnv !== PLACEHOLDER_EAS_PROJECT_ID) return;
   const app = JSON.parse(await io.readText(path.join(root, 'app.json')));
-  if (app.expo?.extra?.eas?.projectId) return;
+  const projectId = app.expo?.extra?.eas?.projectId;
+  if (projectId && projectId !== PLACEHOLDER_EAS_PROJECT_ID) return;
   const whoami = await runChecked(io, {
     command: 'npx',
     args: ['-y', 'eas-cli@latest', 'whoami', '--non-interactive'],

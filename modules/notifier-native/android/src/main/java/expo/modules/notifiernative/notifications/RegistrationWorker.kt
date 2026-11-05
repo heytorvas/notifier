@@ -25,7 +25,10 @@ internal class RegistrationWorker(
       RelayClient(relayUrl).updateRegistration(pairing.inboxId, ownerToken, registrationId)
       Result.success()
     }.getOrElse { error ->
-      if (error is RelayClient.RelayException && error.statusCode in 400..499) {
+      if (error is RelayClient.RelayException && DeliveryPolicy.isInboxMissing(error.statusCode, error.message)) {
+        PairingSync.forgetPeer(applicationContext)
+        Result.success()
+      } else if (error is RelayClient.RelayException && error.statusCode in 400..499) {
         Result.failure()
       } else {
         Result.retry()

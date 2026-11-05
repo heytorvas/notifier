@@ -280,6 +280,57 @@ describe('pairing API', () => {
     expect(oversized.status).toBe(400);
   });
 
+  it('lets either device unpair, and the other device can observe the missing inbox', async () => {
+    const created = await createInbox();
+    const claimed = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/claim`, {
+        method: 'POST',
+        token: created.pairingToken,
+      }),
+    );
+    const { senderToken } = await json<{ senderToken: string }>(claimed);
+
+    const senderStatus = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/status`, { token: senderToken }),
+    );
+    expect(senderStatus.status).toBe(200);
+
+    const reusedPairingToken = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/unpair`, {
+        method: 'POST',
+        token: created.pairingToken,
+      }),
+    );
+    expect(reusedPairingToken.status).toBe(401);
+
+    const senderUnpair = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/unpair`, {
+        method: 'POST',
+        token: senderToken,
+      }),
+    );
+    expect(senderUnpair.status).toBe(204);
+
+    const afterSender = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/status`, { token: created.ownerToken }),
+    );
+    expect(afterSender.status).toBe(404);
+    await expect(json(afterSender)).resolves.toEqual({ error: 'Inbox not found.' });
+
+    const owned = await createInbox();
+    const ownerUnpair = await dispatch(
+      request(`/v1/inboxes/${owned.inboxId}/unpair`, {
+        method: 'POST',
+        token: owned.ownerToken,
+      }),
+    );
+    expect(ownerUnpair.status).toBe(204);
+    const afterOwner = await dispatch(
+      request(`/v1/inboxes/${owned.inboxId}/status`, { token: owned.ownerToken }),
+    );
+    expect(afterOwner.status).toBe(404);
+  });
+
   it('rejects a sender that exceeds the message rate limit', async () => {
     const created = await createInbox();
     const claimed = await dispatch(

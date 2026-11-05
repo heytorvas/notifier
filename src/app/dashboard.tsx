@@ -11,13 +11,15 @@ import { DashboardScreen } from '../ui/screens/DashboardScreen';
 import { colors } from '../ui/theme';
 
 export default function DashboardRoute() {
-  const { apps, loadApps, refreshState, resetPairing, state } = useNotifier();
+  const { alerts, apps, diagnostics, loadApps, resetPairing, state, syncPeer } = useNotifier();
   useEffect(() => {
-    const interval = setInterval(() => {
-      void refreshState().catch(() => undefined);
-    }, 15_000);
+    const tick = () => {
+      void syncPeer().catch(() => undefined);
+    };
+    tick();
+    const interval = setInterval(tick, 15_000);
     return () => clearInterval(interval);
-  }, [refreshState]);
+  }, [syncPeer]);
   useEffect(() => {
     if (state?.role !== 'transmitter' || apps.length > 0) return;
     void loadApps().catch(() => undefined);
@@ -52,12 +54,13 @@ export default function DashboardRoute() {
     }
     const granted = await requestNotificationPermission();
     if (!granted) await Linking.openSettings();
-    await refreshState();
+    await syncPeer();
   };
 
   return (
     <SafeAreaView style={{ backgroundColor: colors.background, flex: 1 }}>
       <DashboardScreen
+        alerts={alerts}
         apps={
           state.role === 'receiver'
             ? state.transmittingApps
@@ -67,6 +70,8 @@ export default function DashboardRoute() {
                 '',
               )
         }
+        diagnostics={diagnostics}
+        listenerConnected={state.listenerConnected}
         notificationAccess={state.notificationAccess}
         onEditApps={() => {
           void loadApps()

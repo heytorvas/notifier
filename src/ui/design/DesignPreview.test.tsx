@@ -48,7 +48,7 @@ describe('DesignPreview', () => {
     expect(screen.getByText('Example Bank')).toBeTruthy();
 
     await fireEvent.press(screen.getByText('Save'));
-    expect(screen.getByText('Example Bank')).toBeTruthy();
+    expect(screen.getAllByText('Example Bank').length).toBeGreaterThan(0);
     expect(screen.getByLabelText('Edit apps')).toBeTruthy();
 
     await fireEvent.press(screen.getByText('Unpair'));

@@ -73,10 +73,16 @@ class PairingStateCodecTest {
     val cleanup = PendingCleanup(
       relayUrl = "https://relay.example",
       inboxId = "inbox",
-      ownerToken = "owner",
+      token = "owner-or-sender",
     )
 
     assertEquals(cleanup, PendingCleanupCodec.decode(PendingCleanupCodec.encode(cleanup)))
+    assertEquals(
+      cleanup.copy(token = "owner"),
+      PendingCleanupCodec.decode(
+        """{"version":1,"relayUrl":"https://relay.example","inboxId":"inbox","ownerToken":"owner"}""",
+      ),
+    )
     assertNull(PendingCleanupCodec.decode("""{"inboxId":""}"""))
   }
 }
