@@ -3,7 +3,16 @@ const expoConfig = require('eslint-config-expo/flat');
 
 module.exports = defineConfig([
   {
-    ignores: ['android/**', 'dist/**', 'dist-check/**', 'node_modules/**', 'relay/**', 'scripts/**'],
+    ignores: [
+      'android/**',
+      'dist/**',
+      'dist-check/**',
+      'node_modules/**',
+      'relay/**',
+      'scripts/**',
+      '.tools/**',
+      'modules/notifier-native/android/build/**',
+    ],
   },
   expoConfig,
   {
