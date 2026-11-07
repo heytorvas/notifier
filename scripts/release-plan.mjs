@@ -22,6 +22,32 @@ const RELAY_FILES = new Set([
   'scripts/relay-config.mjs',
 ]);
 
+const FINGERPRINT_FREE_PREFIXES = [
+  'src/',
+  'relay/',
+  '.github/',
+  'docs/',
+  'scripts/',
+  'modules/notifier-native/android/src/test/',
+];
+const FINGERPRINT_FREE_FILES = new Set(['README.md', 'LICENSE', 'AGENTS.md', 'eslint.config.js', '.npmrc']);
+const FINGERPRINT_SOURCE_FILES = new Set(['src/config/publicAppConfig.js']);
+
+export const FINGERPRINT_IGNORE_PATHS = [
+  'android/**',
+  'ios/**',
+  '**/android/build/**',
+  'modules/notifier-native/android/src/test/**',
+];
+
+export function fingerprintRequired(files = []) {
+  return files.some((file) => !isFingerprintFree(file));
+}
+
+export function runAllTestsFor(eventName, nativeTestsRequested = false) {
+  return eventName !== 'workflow_dispatch' || nativeTestsRequested;
+}
+
 export function selectComparison({ eventName, before, base, head, isAncestor }) {
   if (!head || typeof isAncestor !== 'function') return null;
   if (eventName === 'pull_request') {
@@ -49,6 +75,11 @@ export function planRelease({
     expoUpdate: allowDeploy && javascript && !nativeBuild,
     nativeTests: runAllTests || nativeBuild || files.some(isNativeTest),
   };
+}
+
+function isFingerprintFree(file) {
+  if (FINGERPRINT_SOURCE_FILES.has(file)) return false;
+  return FINGERPRINT_FREE_FILES.has(file) || FINGERPRINT_FREE_PREFIXES.some((prefix) => file.startsWith(prefix));
 }
 
 function isJavascript(file) {

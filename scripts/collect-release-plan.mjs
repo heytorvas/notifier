@@ -1,13 +1,17 @@
 import { execFileSync } from 'node:child_process';
 import { appendFileSync } from 'node:fs';
 
-import { createProjectHashAsync } from '@expo/fingerprint';
-
-import { planRelease, selectComparison } from './release-plan.mjs';
+import {
+  FINGERPRINT_IGNORE_PATHS,
+  fingerprintRequired,
+  planRelease,
+  runAllTestsFor,
+  selectComparison,
+} from './release-plan.mjs';
 
 const fingerprintOptions = {
   platforms: ['android'],
-  ignorePaths: ['android/**', 'ios/**', '**/android/build/**'],
+  ignorePaths: FINGERPRINT_IGNORE_PATHS,
 };
 
 if (process.env.GITHUB_ACTIONS !== 'true') {
@@ -31,31 +35,49 @@ const comparison = selectComparison({
   },
 });
 
-const plan = comparison
-  ? planRelease({
-      ...(await compare(comparison.base, head)),
-      allowDeploy: comparison.allowDeploy,
-    })
-  : planRelease({ runAllTests: true });
-
-writeOutputs(plan);
-
-function writeOutputs(values) {
-  const output = [
-    `relay=${values.relay}`,
-    `migrate=${values.migrate}`,
-    `expo_build=${values.expoBuild}`,
-    `expo_update=${values.expoUpdate}`,
-    `native_tests=${values.nativeTests}`,
-    '',
-  ].join('\n');
-  appendFileSync(process.env.GITHUB_OUTPUT, output);
+if (!comparison) {
+  write({
+    install: false,
+    ...planRelease({
+      runAllTests: runAllTestsFor(process.env.GITHUB_EVENT_NAME, process.env.NATIVE_TESTS === 'true'),
+    }),
+  });
+} else {
+  const files = changedFiles(comparison.base, head);
+  if (process.env.PLAN_PHASE === 'scope' && fingerprintRequired(files)) {
+    write({ install: true });
+  } else if (!fingerprintRequired(files)) {
+    write({ install: false, ...planRelease({ files, allowDeploy: comparison.allowDeploy }) });
+  } else {
+    write({
+      install: true,
+      ...planRelease({ ...(await compare(comparison.base, head, files)), allowDeploy: comparison.allowDeploy }),
+    });
+  }
 }
 
-async function compare(base, current) {
-  const files = git(['diff', '--name-only', '--find-renames', base, current])
-    .split('\n')
-    .filter(Boolean);
+function write(values) {
+  const entries = [
+    ['install', values.install],
+    ['relay', values.relay],
+    ['migrate', values.migrate],
+    ['expo_build', values.expoBuild],
+    ['expo_update', values.expoUpdate],
+    ['native_tests', values.nativeTests],
+  ];
+  const output = entries
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  appendFileSync(process.env.GITHUB_OUTPUT, `${output}\n`);
+}
+
+function changedFiles(base, current) {
+  return git(['diff', '--name-only', '--find-renames', base, current]).split('\n').filter(Boolean);
+}
+
+async function compare(base, current, files) {
+  const { createProjectHashAsync } = await import('@expo/fingerprint');
   let currentHash;
   let baseHash;
   try {

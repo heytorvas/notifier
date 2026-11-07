@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { planRelease, selectComparison } from './release-plan.mjs';
+import { fingerprintRequired, planRelease, runAllTestsFor, selectComparison } from './release-plan.mjs';
 
 const ancestor = (base, head) => base === 'base' && head === 'head';
 
@@ -131,6 +131,51 @@ test('a pull request plans tests without deploys', () => {
   assert.equal(plan.expoUpdate, false);
   assert.equal(plan.relay, false);
   assert.equal(plan.nativeTests, false);
+});
+
+test('application and workflow files do not need a native fingerprint', () => {
+  assert.equal(
+    fingerprintRequired([
+      'src/ui/screens/DashboardScreen.tsx',
+      'relay/src/index.ts',
+      'relay/vitest.config.ts',
+      '.github/workflows/ci.yml',
+      'docs/SETUP_AND_BUILD.md',
+      'scripts/release-plan.mjs',
+    ]),
+    false,
+  );
+});
+
+test('the Expo config helper needs a native fingerprint', () => {
+  assert.equal(fingerprintRequired(['src/config/publicAppConfig.js']), true);
+});
+
+test('native unit tests do not need a native fingerprint', () => {
+  assert.equal(
+    fingerprintRequired([
+      'modules/notifier-native/android/src/test/java/expo/modules/notifiernative/notifications/MirrorPolicyTest.kt',
+    ]),
+    false,
+  );
+});
+
+test('app config, dependencies, assets, and native source need a native fingerprint', () => {
+  for (const file of [
+    'app.json',
+    'app.config.ts',
+    'package-lock.json',
+    'assets/icon.png',
+    'modules/notifier-native/android/src/main/java/expo/modules/notifiernative/notifications/MirrorPolicy.kt',
+  ]) {
+    assert.equal(fingerprintRequired([file]), true, file);
+  }
+});
+
+test('a manual run does not force Android tests unless requested', () => {
+  assert.equal(runAllTestsFor('workflow_dispatch'), false);
+  assert.equal(runAllTestsFor('workflow_dispatch', true), true);
+  assert.equal(runAllTestsFor('push'), true);
 });
 
 test('history that cannot be compared runs the full test set and deploys nothing', () => {

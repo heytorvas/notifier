@@ -6,43 +6,61 @@ on:
       - main
   pull_request:
   workflow_dispatch:
+    inputs:
+      native_tests:
+        description: Run Android unit tests
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   plan:
     name: Plan checks and deploys
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
-      relay: ${{ steps.plan.outputs.relay }}
-      migrate: ${{ steps.plan.outputs.migrate }}
-      expo_build: ${{ steps.plan.outputs.expo_build }}
-      expo_update: ${{ steps.plan.outputs.expo_update }}
-      native_tests: ${{ steps.plan.outputs.native_tests }}
+      relay: ${{ steps.full.outputs.relay || steps.scope.outputs.relay }}
+      migrate: ${{ steps.full.outputs.migrate || steps.scope.outputs.migrate }}
+      expo_build: ${{ steps.full.outputs.expo_build || steps.scope.outputs.expo_build }}
+      expo_update: ${{ steps.full.outputs.expo_update || steps.scope.outputs.expo_update }}
+      native_tests: ${{ steps.full.outputs.native_tests || steps.scope.outputs.native_tests }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           persist-credentials: false
+      - id: scope
+        env:
+          PLAN_PHASE: scope
+          BEFORE_SHA: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          NATIVE_TESTS: ${{ inputs.native_tests }}
+        run: node scripts/collect-release-plan.mjs
       - uses: actions/setup-node@v6
+        if: steps.scope.outputs.install == 'true'
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - id: plan
+      - if: steps.scope.outputs.install == 'true'
+        run: npm ci
+      - id: full
+        if: steps.scope.outputs.install == 'true'
         env:
           BEFORE_SHA: ${{ github.event.before }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          NATIVE_TESTS: ${{ inputs.native_tests }}
         run: node scripts/collect-release-plan.mjs
 
   test-app:
     name: App checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
         with:
@@ -60,6 +78,7 @@ jobs:
   test-relay:
     name: Relay checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
         with:
@@ -75,10 +94,11 @@ jobs:
 
   test-android:
     name: Android unit tests
-    runs-on: ubuntu-latest
+    # This image already includes Android platform 37.0 and build-tools 37.0.0.
+    runs-on: ubuntu-24.04
     needs: plan
     if: needs.plan.outputs.native_tests == 'true'
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
         with:
@@ -87,15 +107,26 @@ jobs:
         with:
           distribution: temurin
           java-version: 17
-      - uses: android-actions/setup-android@v3
+          cache: gradle
+      - name: Use the preinstalled Android 37 SDK
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-}}"
+          if [ -n "$sdk" ] && [ -d "$sdk/platforms/android-37.0" ] && [ -d "$sdk/build-tools/37.0.0" ]; then
+            echo "Android SDK 37.0.0 is already on the runner"
+            exit 0
+          fi
+          echo "Android SDK 37.0.0 is not on the runner; installing it"
+          if ! command -v sdkmanager >/dev/null 2>&1; then
+            echo "sdkmanager is not on PATH" >&2
+            exit 1
+          fi
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-37.0" "build-tools;37.0.0"
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
-      - name: Install Android SDK 37
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install "platforms;android-37" "build-tools;37.0.0"
       - run: npm ci
       - run: npx expo prebuild --non-interactive --platform android --no-install
       - name: Run notifier-native unit tests
@@ -105,6 +136,7 @@ jobs:
   deploy-relay:
     name: Deploy relay
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [plan, test-app, test-relay, test-android]
     if: >-
       github.event_name == 'push' &&
@@ -153,6 +185,7 @@ jobs:
   deploy-android:
     name: Build Android binary
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [plan, test-app, test-relay, test-android]
     if: >-
       github.event_name == 'push' &&
@@ -197,6 +230,7 @@ jobs:
   deploy-update:
     name: Publish JavaScript update
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     needs: [plan, test-app, test-relay, test-android]
     if: >-
       github.event_name == 'push' &&
