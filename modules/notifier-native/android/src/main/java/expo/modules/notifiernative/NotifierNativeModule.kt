@@ -29,6 +29,7 @@ import expo.modules.notifiernative.notifications.IconStore
 import expo.modules.notifiernative.notifications.ListenerBinding
 import expo.modules.notifiernative.notifications.ListenerConnectionState
 import expo.modules.notifiernative.notifications.ListenerRecovery
+import expo.modules.notifiernative.notifications.ListenerSession
 import expo.modules.notifiernative.notifications.MaintenanceWorker
 import expo.modules.notifiernative.notifications.PairingSync
 import expo.modules.notifiernative.notifications.ProfileSyncWorker
@@ -225,7 +226,10 @@ class NotifierNativeModule : Module() {
     } else {
       hasNotificationAccess(context)
     }
-    if (pairing?.role == DeviceRole.TRANSMITTER) ListenerRecovery.rebindIfNeeded(context)
+    if (pairing?.role == DeviceRole.TRANSMITTER) {
+      ListenerRecovery.rebindIfNeeded(context)
+      ListenerSession.publishActive()
+    }
     val listenerConnected = ListenerBinding.listenerConnected(
       isTransmitter = pairing?.role == DeviceRole.TRANSMITTER,
       permissionGranted = permission,

@@ -38,6 +38,22 @@ class LocalRecordsTest {
   }
 
   @Test
+  fun diagnosticsKeepOneCopyOfTheNewestMessage() {
+    val failure = DiagnosticRecord(id = "1", at = 10, message = "Pairing check failed")
+    val repeated = DiagnosticJournal.append(
+      listOf(failure),
+      DiagnosticRecord(id = "2", at = 20, message = "Pairing check failed"),
+    )
+    assertEquals(listOf("1"), repeated.map(DiagnosticRecord::id))
+
+    val restored = DiagnosticJournal.append(
+      repeated,
+      DiagnosticRecord(id = "3", at = 30, message = "Pairing check restored"),
+    )
+    assertEquals(listOf("3", "1"), restored.map(DiagnosticRecord::id))
+  }
+
+  @Test
   fun diagnosticsKeepTheNewestEighty() {
     val records = (1..90).map { DiagnosticRecord(id = it.toString(), at = it.toLong(), message = "Event $it") }
     val kept = records.fold(emptyList<DiagnosticRecord>(), DiagnosticJournal::append)
@@ -45,6 +61,15 @@ class LocalRecordsTest {
     assertEquals("90", kept.first().id)
     assertFalse(kept.any { it.id == "1" })
     assertEquals(kept, DiagnosticJournal.decode(DiagnosticJournal.encode(kept)))
+  }
+
+  @Test
+  fun rebindIsAnnouncedOnceUntilTheListenerConnects() {
+    val announcement = ListenerBinding.REBIND_ANNOUNCEMENT
+    assertTrue(ListenerBinding.shouldAnnounceRebind(emptyList()))
+    assertFalse(ListenerBinding.shouldAnnounceRebind(listOf("Queued 2 alerts still on screen", announcement)))
+    assertTrue(ListenerBinding.shouldAnnounceRebind(listOf("Listener connected", announcement)))
+    assertTrue(ListenerBinding.shouldAnnounceRebind(listOf("Listener disconnected", announcement)))
   }
 
   @Test

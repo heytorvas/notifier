@@ -10,6 +10,7 @@ internal class DeviceJournal(context: Context) {
   private val directory = context.applicationContext.noBackupFilesDir
   private val alertsFile = File(directory, "notifier-alerts.bin")
   private val diagnosticsFile = File(directory, "notifier-diagnostics.bin")
+  private val ledgerFile = File(directory, "notifier-mirror-ledger.bin")
 
   fun alerts(): List<AlertRecord> = synchronized(lock) { AlertJournal.decode(read(alertsFile)) }
 
@@ -31,16 +32,29 @@ internal class DeviceJournal(context: Context) {
   }
 
   fun addDiagnostic(message: String, at: Long = System.currentTimeMillis()) = synchronized(lock) {
-    val record = DiagnosticRecord(id = UUID.randomUUID().toString(), at = at, message = message.take(180))
-    write(
-      diagnosticsFile,
-      DiagnosticJournal.encode(DiagnosticJournal.append(diagnosticsUnlocked(), record)),
+    val current = diagnosticsUnlocked()
+    val updated = DiagnosticJournal.append(
+      current,
+      DiagnosticRecord(id = UUID.randomUUID().toString(), at = at, message = message.take(180)),
     )
+    if (updated === current) return@synchronized
+    write(diagnosticsFile, DiagnosticJournal.encode(updated))
+  }
+
+  fun deliveredIdentities(): List<String> = synchronized(lock) {
+    MirrorPolicy.decode(read(ledgerFile))
+  }
+
+  fun rememberDelivered(identities: List<String>) = synchronized(lock) {
+    if (identities.isEmpty()) return
+    val updated = MirrorPolicy.remember(MirrorPolicy.decode(read(ledgerFile)), identities)
+    write(ledgerFile, MirrorPolicy.encode(updated))
   }
 
   fun clear() = synchronized(lock) {
     alertsFile.delete()
     diagnosticsFile.delete()
+    ledgerFile.delete()
   }
 
   fun quietly(block: DeviceJournal.() -> Unit) {

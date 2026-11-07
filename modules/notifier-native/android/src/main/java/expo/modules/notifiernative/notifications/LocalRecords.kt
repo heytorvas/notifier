@@ -90,8 +90,11 @@ internal object AlertJournal {
 internal object DiagnosticJournal {
   const val LIMIT = 80
 
-  fun append(records: List<DiagnosticRecord>, record: DiagnosticRecord): List<DiagnosticRecord> =
-    byRecent(records + record).take(LIMIT)
+  fun append(records: List<DiagnosticRecord>, record: DiagnosticRecord): List<DiagnosticRecord> {
+    val newest = records.maxWithOrNull(compareBy<DiagnosticRecord> { it.at }.thenBy { it.id })
+    if (newest?.message == record.message) return records
+    return byRecent(records + record).take(LIMIT)
+  }
 
   fun encode(records: List<DiagnosticRecord>): String {
     val array = JSONArray()
@@ -130,6 +133,11 @@ internal object DiagnosticJournal {
 
 internal object ListenerBinding {
   const val REBIND_INTERVAL_MS = 30_000L
+  const val REBIND_ANNOUNCEMENT = "Listener is not connected. Rebind requested."
+  private val listenerStatus = setOf("Listener connected", "Listener disconnected", REBIND_ANNOUNCEMENT)
+
+  fun shouldAnnounceRebind(newestFirst: List<String>): Boolean =
+    newestFirst.firstOrNull { it in listenerStatus } != REBIND_ANNOUNCEMENT
 
   @Volatile
   var lastAttemptElapsedMs: Long = 0L

@@ -3,7 +3,6 @@ package expo.modules.notifiernative.security
 import android.content.Context
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Base64
 import java.security.KeyStore
 import java.security.SecureRandom
 import javax.crypto.Cipher
@@ -87,10 +86,8 @@ internal class CryptoStore(context: Context) {
       return String(cipher.doFinal(decode(ciphertext)), Charsets.UTF_8)
     }
 
-    fun encode(bytes: ByteArray): String =
-      Base64.encodeToString(bytes, Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING)
+    fun encode(bytes: ByteArray): String = UrlBase64.encode(bytes)
 
-    fun decode(value: String): ByteArray =
-      Base64.decode(value, Base64.NO_WRAP or Base64.URL_SAFE or Base64.NO_PADDING)
+    fun decode(value: String): ByteArray = UrlBase64.decode(value)
   }
 }

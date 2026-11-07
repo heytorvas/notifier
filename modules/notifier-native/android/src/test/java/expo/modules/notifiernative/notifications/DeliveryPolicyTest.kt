@@ -51,10 +51,39 @@ class DeliveryPolicyTest {
   }
 
   @Test
-  fun pairingCheckLogsAFailureOnceUntilItChanges() {
-    assertEquals("Pairing check failed (503)", DeliveryPolicy.pairingFailureMessage(null, 503))
-    assertNull(DeliveryPolicy.pairingFailureMessage(503, 503))
-    assertEquals("Pairing check failed", DeliveryPolicy.pairingFailureMessage(503, DeliveryPolicy.NETWORK_FAILURE))
-    assertNull(DeliveryPolicy.pairingFailureMessage(DeliveryPolicy.NETWORK_FAILURE, DeliveryPolicy.NETWORK_FAILURE))
+  fun pairingCheckLogsAFailureOnceUntilTheOutcomeChanges() {
+    assertFalse(DeliveryPolicy.shouldProbePairing(hasValidatedNetwork = false))
+    assertTrue(DeliveryPolicy.shouldProbePairing(hasValidatedNetwork = true))
+
+    val timeout = checkNotNull(
+      DeliveryPolicy.nextPairingFailure(null, DeliveryPolicy.NETWORK_FAILURE, "SocketTimeoutException"),
+    )
+    assertEquals("Pairing check failed: SocketTimeoutException", timeout)
+    assertNull(DeliveryPolicy.nextPairingFailure(timeout, DeliveryPolicy.NETWORK_FAILURE, "SocketTimeoutException"))
+    assertEquals("Pairing check failed (503)", DeliveryPolicy.nextPairingFailure(timeout, 503, null))
+    assertEquals(
+      "Pairing check failed",
+      DeliveryPolicy.nextPairingFailure(null, DeliveryPolicy.NETWORK_FAILURE, "   "),
+    )
+    assertEquals(
+      "Pairing check failed: ${"n".repeat(60)}",
+      DeliveryPolicy.nextPairingFailure(null, DeliveryPolicy.NETWORK_FAILURE, "n".repeat(80)),
+    )
+
+    val activity = listOf("Listener connected", timeout, DeliveryPolicy.PAIRING_RESTORED)
+    assertEquals(timeout, DeliveryPolicy.newestPairingMessage(activity))
+    assertEquals(
+      DeliveryPolicy.PAIRING_RESTORED,
+      DeliveryPolicy.newestPairingMessage(listOf("Listener connected", DeliveryPolicy.PAIRING_RESTORED, timeout)),
+    )
+    assertNull(DeliveryPolicy.newestPairingMessage(listOf("Listener connected")))
+    assertEquals(
+      timeout,
+      DeliveryPolicy.nextPairingFailure(
+        DeliveryPolicy.PAIRING_RESTORED,
+        DeliveryPolicy.NETWORK_FAILURE,
+        "SocketTimeoutException",
+      ),
+    )
   }
 }

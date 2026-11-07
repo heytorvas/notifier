@@ -42,6 +42,8 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+/modules/notifier-native/android/build/
+/modules/notifier-native/android/.gradle/
 
 # Cloudflare Worker build output and local deployment values
 /relay/dist/

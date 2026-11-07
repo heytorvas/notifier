@@ -23,6 +23,7 @@ internal class MaintenanceWorker(
     val pairing = NotifierStore(context).pairingState
     if (pairing?.role == DeviceRole.TRANSMITTER) {
       ListenerRecovery.rebindIfNeeded(context)
+      ListenerSession.publishActive()
     }
     PairingSync.refresh(context)
     return Result.success()
@@ -59,7 +60,11 @@ internal object ListenerRecovery {
     )
     if (!announcedDisconnected) {
       announcedDisconnected = true
-      DeviceJournal(context).quietly { addDiagnostic("Listener is not connected. Rebind requested.") }
+      val journal = DeviceJournal(context)
+      val messages = journal.diagnostics().map(DiagnosticRecord::message)
+      if (ListenerBinding.shouldAnnounceRebind(messages)) {
+        journal.quietly { addDiagnostic(ListenerBinding.REBIND_ANNOUNCEMENT) }
+      }
     }
   }
 

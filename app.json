@@ -19,7 +19,7 @@
     "android": {
       "backgroundColor": "#000000",
       "package": "dev.heytor.notifier",
-      "versionCode": 3,
+      "versionCode": 4,
       "allowBackup": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
