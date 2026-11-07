@@ -32,10 +32,7 @@ export function findReleaseEnvProblems(env) {
   const problems = [];
   if (identity.projectId === PLACEHOLDER_EAS_PROJECT_ID) problems.push('EAS_PROJECT_ID');
   if (identity.owner === PLACEHOLDER_EXPO_OWNER) problems.push('EXPO_OWNER');
-  if (
-    identity.updatesUrl.includes(PLACEHOLDER_EAS_PROJECT_ID) ||
-    (env.EXPO_PUBLIC_UPDATES_URL && !env.EXPO_PUBLIC_UPDATES_URL.startsWith('https://u.expo.dev/'))
-  ) {
+  if (identity.updatesUrl !== `https://u.expo.dev/${identity.projectId}`) {
     problems.push('EXPO_PUBLIC_UPDATES_URL');
   }
   for (const key of PUBLIC_KEYS) {

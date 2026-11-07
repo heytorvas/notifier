@@ -29,16 +29,29 @@ test('rejects committed placeholders', () => {
   assert.deepEqual(problems, [
     'EAS_PROJECT_ID',
     'EXPO_OWNER',
+    'EXPO_PUBLIC_UPDATES_URL',
     'EXPO_PUBLIC_RELAY_URL',
     'EXPO_PUBLIC_FIREBASE_API_KEY',
   ]);
 });
 
-test('rejects an updates URL that does not belong to Expo', () => {
+test('rejects an updates URL that does not belong to the same Expo project', () => {
   assert.deepEqual(
     findReleaseEnvProblems({ ...ready, EXPO_PUBLIC_UPDATES_URL: 'https://example.com/updates' }),
     ['EXPO_PUBLIC_UPDATES_URL'],
   );
+  assert.deepEqual(
+    findReleaseEnvProblems({
+      ...ready,
+      EXPO_PUBLIC_UPDATES_URL: 'https://u.expo.dev/22222222-2222-2222-2222-222222222222',
+    }),
+    ['EXPO_PUBLIC_UPDATES_URL'],
+  );
+});
+
+test('derives the updates URL from the project when it is omitted', () => {
+  const { EXPO_PUBLIC_UPDATES_URL: _updatesUrl, ...withoutUpdatesUrl } = ready;
+  assert.deepEqual(findReleaseEnvProblems(withoutUpdatesUrl), []);
 });
 
 test('rejects a relay URL that is not https', () => {
