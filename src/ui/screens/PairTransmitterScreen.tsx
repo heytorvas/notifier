@@ -33,7 +33,7 @@ export function PairTransmitterScreen({ loading, onPair, onCancel, camera = 'dev
         <AppText weight="medium" style={styles.heading}>
           Scan the code
         </AppText>
-        <AppText tone="muted">Or paste it from the other device.</AppText>
+        <AppText tone="muted">Place the code inside the frame, or paste it.</AppText>
       </View>
       <View style={styles.cameraFrame}>
         {camera === 'device' ? (
@@ -98,11 +98,46 @@ function DeviceCamera({
   }
 
   return (
-    <CameraView
-      barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
-      onBarcodeScanned={handleScan}
-      style={StyleSheet.absoluteFill}
-    />
+    <View style={StyleSheet.absoluteFill}>
+      <CameraView
+        barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+        onBarcodeScanned={handleScan}
+        style={StyleSheet.absoluteFill}
+      />
+      <QrViewfinder />
+    </View>
+  );
+}
+
+function QrViewfinder() {
+  const [windowSize, setWindowSize] = useState(220);
+
+  return (
+    <View
+      pointerEvents="none"
+      style={styles.finder}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        const next = Math.round(Math.min(width, height) * 0.72);
+        if (next >= 160) setWindowSize(Math.min(next, 280));
+      }}
+    >
+      <View style={styles.mask} />
+      <View style={styles.finderRow}>
+        <View style={styles.mask} />
+        <View
+          accessibilityLabel="QR code viewfinder"
+          style={[styles.window, { height: windowSize, width: windowSize }]}
+        >
+          <View style={[styles.corner, styles.cornerTopLeft]} />
+          <View style={[styles.corner, styles.cornerTopRight]} />
+          <View style={[styles.corner, styles.cornerBottomLeft]} />
+          <View style={[styles.corner, styles.cornerBottomRight]} />
+        </View>
+        <View style={styles.mask} />
+      </View>
+      <View style={styles.mask} />
+    </View>
   );
 }
 
@@ -156,5 +191,52 @@ const styles = StyleSheet.create({
     maxHeight: 88,
     minHeight: 44,
     paddingVertical: spacing.sm,
+  },
+  finder: {
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0,
+  },
+  finderRow: {
+    flexDirection: 'row',
+  },
+  mask: {
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    flex: 1,
+  },
+  window: {
+    backgroundColor: 'transparent',
+  },
+  corner: {
+    borderColor: colors.white,
+    height: 28,
+    position: 'absolute',
+    width: 28,
+  },
+  cornerTopLeft: {
+    borderLeftWidth: 3,
+    borderTopWidth: 3,
+    left: 0,
+    top: 0,
+  },
+  cornerTopRight: {
+    borderRightWidth: 3,
+    borderTopWidth: 3,
+    right: 0,
+    top: 0,
+  },
+  cornerBottomLeft: {
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    bottom: 0,
+    left: 0,
+  },
+  cornerBottomRight: {
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    bottom: 0,
+    right: 0,
   },
 });
