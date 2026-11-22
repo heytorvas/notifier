@@ -63,7 +63,12 @@ class NotifierNativeModule : Module() {
     AsyncFunction("getState") { stateMap() }
 
     AsyncFunction("syncPairing") {
-      PairingSync.refresh(requireContext())
+      val context = requireContext()
+      if (NotifierStore(context).pairingState?.role == DeviceRole.TRANSMITTER) {
+        ListenerRecovery.rebindIfNeeded(context)
+        ListenerSession.publishActive()
+      }
+      PairingSync.refresh(context)
       stateMap()
     }
 

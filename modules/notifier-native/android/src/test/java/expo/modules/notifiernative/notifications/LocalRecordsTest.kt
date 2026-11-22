@@ -73,6 +73,77 @@ class LocalRecordsTest {
   }
 
   @Test
+  fun aFreshProcessOnlyRebindsUntilTheListenerHasStayedDown() {
+    assertEquals(
+      ListenerBinding.RecoveryStep.REBIND,
+      ListenerBinding.recoveryStep(
+        shouldAttempt = true,
+        downForMs = 0,
+        millisSinceReset = null,
+        resetsThisOutage = 0,
+      ),
+    )
+    assertEquals(
+      ListenerBinding.RecoveryStep.RESET,
+      ListenerBinding.recoveryStep(
+        shouldAttempt = true,
+        downForMs = ListenerBinding.RESET_GRACE_MS,
+        millisSinceReset = null,
+        resetsThisOutage = 0,
+      ),
+    )
+    assertEquals(
+      ListenerBinding.RecoveryStep.REBIND,
+      ListenerBinding.recoveryStep(
+        shouldAttempt = true,
+        downForMs = ListenerBinding.RESET_GRACE_MS,
+        millisSinceReset = 30_000,
+        resetsThisOutage = 1,
+      ),
+    )
+    assertEquals(
+      ListenerBinding.RecoveryStep.NONE,
+      ListenerBinding.recoveryStep(
+        shouldAttempt = false,
+        downForMs = ListenerBinding.RESET_GRACE_MS,
+        millisSinceReset = null,
+        resetsThisOutage = 0,
+      ),
+    )
+    assertEquals(
+      ListenerBinding.RecoveryStep.REBIND,
+      ListenerBinding.recoveryStep(
+        shouldAttempt = true,
+        downForMs = ListenerBinding.RESET_COOLDOWN_MS,
+        millisSinceReset = null,
+        resetsThisOutage = ListenerBinding.MAX_RESETS_PER_OUTAGE,
+      ),
+    )
+  }
+
+  @Test
+  fun listenerHealthIsNotReportedDownDuringTheStartupGrace() {
+    assertFalse(ListenerBinding.shouldReportListener(false, downForMs = 0, lastReported = null, millisSinceReport = 0))
+    assertTrue(
+      ListenerBinding.shouldReportListener(
+        connected = false,
+        downForMs = ListenerBinding.RESET_GRACE_MS,
+        lastReported = null,
+        millisSinceReport = 0,
+      ),
+    )
+    assertTrue(ListenerBinding.shouldReportListener(true, downForMs = 0, lastReported = null, millisSinceReport = 0))
+    assertFalse(
+      ListenerBinding.shouldReportListener(
+        connected = true,
+        downForMs = 0,
+        lastReported = true,
+        millisSinceReport = 1_000,
+      ),
+    )
+  }
+
+  @Test
   fun rebindRunsOnlyWhilePermissionIsOnAndTheListenerIsDown() {
     assertTrue(ListenerBinding.shouldRebind(true, false, nowMs = 30_000, lastAttemptMs = 0))
     assertFalse(ListenerBinding.shouldRebind(true, true, nowMs = 30_000, lastAttemptMs = 0))

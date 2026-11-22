@@ -133,11 +133,49 @@ internal object DiagnosticJournal {
 
 internal object ListenerBinding {
   const val REBIND_INTERVAL_MS = 30_000L
+  const val RESET_GRACE_MS = 60_000L
+  const val RESET_COOLDOWN_MS = 120_000L
+  const val REPORT_INTERVAL_MS = 5 * 60 * 1000L
+  const val MAX_RESETS_PER_OUTAGE = 3
   const val REBIND_ANNOUNCEMENT = "Listener is not connected. Rebind requested."
-  private val listenerStatus = setOf("Listener connected", "Listener disconnected", REBIND_ANNOUNCEMENT)
+  const val RESET_ANNOUNCEMENT = "Listener is not connected. Binding reset."
+  private val listenerStatus = setOf(
+    "Listener connected",
+    "Listener disconnected",
+    REBIND_ANNOUNCEMENT,
+    RESET_ANNOUNCEMENT,
+  )
+
+  enum class RecoveryStep { NONE, REBIND, RESET }
+
+  fun shouldAnnounce(newestFirst: List<String>, message: String): Boolean =
+    newestFirst.firstOrNull { it in listenerStatus } != message
 
   fun shouldAnnounceRebind(newestFirst: List<String>): Boolean =
-    newestFirst.firstOrNull { it in listenerStatus } != REBIND_ANNOUNCEMENT
+    shouldAnnounce(newestFirst, REBIND_ANNOUNCEMENT)
+
+  fun recoveryStep(
+    shouldAttempt: Boolean,
+    downForMs: Long,
+    millisSinceReset: Long?,
+    resetsThisOutage: Int,
+  ): RecoveryStep {
+    if (!shouldAttempt) return RecoveryStep.NONE
+    val cooledDown = millisSinceReset == null || millisSinceReset >= RESET_COOLDOWN_MS
+    val stuck = downForMs >= RESET_GRACE_MS && resetsThisOutage < MAX_RESETS_PER_OUTAGE && cooledDown
+    return if (stuck) RecoveryStep.RESET else RecoveryStep.REBIND
+  }
+
+  fun shouldReportListener(
+    connected: Boolean,
+    downForMs: Long,
+    lastReported: Boolean?,
+    millisSinceReport: Long,
+  ): Boolean {
+    if (!connected && downForMs < RESET_GRACE_MS) return false
+    if (lastReported != connected) return true
+    return millisSinceReport >= REPORT_INTERVAL_MS
+  }
 
   @Volatile
   var lastAttemptElapsedMs: Long = 0L

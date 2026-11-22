@@ -20,7 +20,7 @@ class NotifierListenerService : NotificationListenerService() {
   override fun onListenerConnected() {
     super.onListenerConnected()
     ListenerConnectionState.connected = true
-    ListenerRecovery.noteConnected()
+    ListenerRecovery.noteConnected(this)
     ListenerSession.attach(this)
     DeviceJournal(this).quietly { addDiagnostic("Listener connected") }
     publishActiveNotifications()

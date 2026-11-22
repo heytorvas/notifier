@@ -36,6 +36,18 @@ internal class NotifierStore(context: Context) {
     get() = preferences.getString(KEY_PEER_MODEL, "").orEmpty()
     set(value) = preferences.edit().putString(KEY_PEER_MODEL, value).apply()
 
+  var listenerResetCount: Int
+    get() = preferences.getInt(KEY_LISTENER_RESETS, 0)
+    set(value) = preferences.edit().putInt(KEY_LISTENER_RESETS, value).apply()
+
+  var listenerResetAt: Long
+    get() = preferences.getLong(KEY_LISTENER_RESET_AT, 0L)
+    set(value) = preferences.edit().putLong(KEY_LISTENER_RESET_AT, value).apply()
+
+  var listenerDownSince: Long
+    get() = preferences.getLong(KEY_LISTENER_DOWN_SINCE, 0L)
+    set(value) = preferences.edit().putLong(KEY_LISTENER_DOWN_SINCE, value).apply()
+
   var remoteApps: List<RemoteAppRecord>
     get() = decodeApps(preferences.getString(KEY_REMOTE_APPS, null))
     set(value) = preferences.edit().putString(KEY_REMOTE_APPS, encodeApps(value)).apply()
@@ -95,6 +107,9 @@ internal class NotifierStore(context: Context) {
       .remove(KEY_PAIRED_AT)
       .remove(KEY_PEER_BRAND)
       .remove(KEY_PEER_MODEL)
+      .remove(KEY_LISTENER_RESETS)
+      .remove(KEY_LISTENER_RESET_AT)
+      .remove(KEY_LISTENER_DOWN_SINCE)
       .remove(KEY_REMOTE_APPS)
       .remove(KEY_SYNCED_ICONS)
       .apply()
@@ -146,6 +161,9 @@ internal class NotifierStore(context: Context) {
     private const val KEY_PAIRED_AT = "paired_at"
     private const val KEY_PEER_BRAND = "peer_brand"
     private const val KEY_PEER_MODEL = "peer_model"
+    private const val KEY_LISTENER_RESETS = "listener_resets"
+    private const val KEY_LISTENER_RESET_AT = "listener_reset_at"
+    private const val KEY_LISTENER_DOWN_SINCE = "listener_down_since"
     private const val KEY_REMOTE_APPS = "remote_apps"
     private const val KEY_SYNCED_ICONS = "synced_icons"
     private const val KEY_FIREBASE_APPLICATION_ID = "firebase_application_id"

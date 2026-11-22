@@ -2,6 +2,7 @@ package expo.modules.notifiernative.notifications
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import androidx.core.app.NotificationManagerCompat
@@ -44,31 +45,69 @@ internal class MaintenanceWorker(
 }
 
 internal object ListenerRecovery {
-  @Volatile
-  private var announcedDisconnected = false
-
   fun rebindIfNeeded(context: Context) {
+    val store = NotifierStore(context)
     val granted = NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
-    val now = SystemClock.elapsedRealtime()
-    if (!ListenerBinding.shouldRebind(granted, ListenerConnectionState.connected, now, ListenerBinding.lastAttemptElapsedMs)) {
-      if (ListenerConnectionState.connected) announcedDisconnected = false
-      return
+    val nowElapsed = SystemClock.elapsedRealtime()
+    val now = System.currentTimeMillis()
+    if (!granted || ListenerConnectionState.connected) {
+      noteConnected(context)
+    } else if (store.listenerDownSince == 0L) {
+      store.listenerDownSince = now
     }
-    ListenerBinding.lastAttemptElapsedMs = now
-    NotificationListenerService.requestRebind(
-      ComponentName(context, NotifierListenerService::class.java),
+    val downFor = if (store.listenerDownSince == 0L) 0L else now - store.listenerDownSince
+    val sinceReset = store.listenerResetAt.takeIf { it > 0L }?.let { now - it }
+    val step = ListenerBinding.recoveryStep(
+      shouldAttempt = ListenerBinding.shouldRebind(
+        granted,
+        ListenerConnectionState.connected,
+        nowElapsed,
+        ListenerBinding.lastAttemptElapsedMs,
+      ),
+      downForMs = downFor,
+      millisSinceReset = sinceReset,
+      resetsThisOutage = store.listenerResetCount,
     )
-    if (!announcedDisconnected) {
-      announcedDisconnected = true
-      val journal = DeviceJournal(context)
-      val messages = journal.diagnostics().map(DiagnosticRecord::message)
-      if (ListenerBinding.shouldAnnounceRebind(messages)) {
-        journal.quietly { addDiagnostic(ListenerBinding.REBIND_ANNOUNCEMENT) }
-      }
+    if (step == ListenerBinding.RecoveryStep.NONE) return
+    ListenerBinding.lastAttemptElapsedMs = nowElapsed
+    if (step == ListenerBinding.RecoveryStep.RESET) {
+      store.listenerResetAt = System.currentTimeMillis()
+      store.listenerResetCount += 1
+      resetComponent(context)
+    }
+    val component = ComponentName(context, NotifierListenerService::class.java)
+    NotificationListenerService.requestRebind(component)
+    val message = if (step == ListenerBinding.RecoveryStep.RESET) {
+      ListenerBinding.RESET_ANNOUNCEMENT
+    } else {
+      ListenerBinding.REBIND_ANNOUNCEMENT
+    }
+    val journal = DeviceJournal(context)
+    if (ListenerBinding.shouldAnnounce(journal.diagnostics().map(DiagnosticRecord::message), message)) {
+      journal.quietly { addDiagnostic(message) }
     }
   }
 
-  fun noteConnected() {
-    announcedDisconnected = false
+  fun noteConnected(context: Context) {
+    val store = NotifierStore(context)
+    if (store.listenerResetCount == 0 && store.listenerResetAt == 0L && store.listenerDownSince == 0L) return
+    store.listenerResetCount = 0
+    store.listenerResetAt = 0L
+    store.listenerDownSince = 0L
+  }
+
+  private fun resetComponent(context: Context) {
+    val component = ComponentName(context, NotifierListenerService::class.java)
+    val manager = context.packageManager
+    manager.setComponentEnabledSetting(
+      component,
+      PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+      PackageManager.DONT_KILL_APP,
+    )
+    manager.setComponentEnabledSetting(
+      component,
+      PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+      PackageManager.DONT_KILL_APP,
+    )
   }
 }
