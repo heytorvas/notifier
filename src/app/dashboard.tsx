@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { requestNotificationPermission } from '../application/notificationPermission';
 import { useNotifier } from '../application/NotifierProvider';
+import { singleFlight } from '../application/singleFlight';
 import { orderInstalledApps } from '../domain/devices';
 import { notifierGateway } from '../infrastructure/notifierGateway';
 import { DashboardScreen } from '../ui/screens/DashboardScreen';
@@ -13,9 +14,7 @@ import { colors } from '../ui/theme';
 export default function DashboardRoute() {
   const { alerts, apps, diagnostics, loadApps, resetPairing, state, syncPeer } = useNotifier();
   useEffect(() => {
-    const tick = () => {
-      void syncPeer().catch(() => undefined);
-    };
+    const tick = singleFlight(() => syncPeer().then(() => undefined).catch(() => undefined));
     tick();
     const interval = setInterval(tick, 15_000);
     return () => clearInterval(interval);
