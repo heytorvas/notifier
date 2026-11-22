@@ -274,7 +274,9 @@ correcting the project, then rebuild.
 
 ### Pairing works but messages do not arrive
 
-- Confirm the tablet dashboard says Connected. Reconnecting means Android still has notification access enabled, but the listener service is not bound; the activity log shows the rebind attempt.
+- Confirm the sending device says Connected. Reconnecting means notification access is still granted, but Android has dropped the listener. The app restarts that binding on its own; the activity log says when it requests a rebind or resets the binding. If Reconnecting remains, turn Notifier off and on in notification access, then open Notifier again.
+- Not delivering on the receiving device means the sending device reported that its listener is down, or it has not checked in for 3 hours. Connected on the receiver only means that phone can post alerts.
+- Pairing check failed with SocketTimeoutException, SocketException, or UnknownHostException means that device could not reach the relay. Those checks retry and do not stop mirroring. The activity log says Pairing check restored after the next success.
 - Open Activity on the dashboard. It records listener, relay, and delivery failures without notification text.
 - Confirm the source app is selected.
 - Confirm the phone granted notification permission and did not disable the mirrored-notifications
