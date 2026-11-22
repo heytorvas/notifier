@@ -55,6 +55,16 @@ internal class RelayClient(private val baseUrl: String) {
     return PairingStatus(
       claimed = response.getBoolean("claimed"),
       claimedAt = response.optionalLong("claimedAt"),
+      senderListener = response.senderListener(),
+    )
+  }
+
+  fun reportListener(inboxId: String, senderToken: String, listening: Boolean) {
+    request(
+      path = "/v1/inboxes/$inboxId/listener",
+      method = "PUT",
+      bearerToken = senderToken,
+      body = JSONObject().put("listening", listening),
     )
   }
 
@@ -166,6 +176,7 @@ internal class RelayClient(private val baseUrl: String) {
   data class PairingStatus(
     val claimed: Boolean,
     val claimedAt: Long?,
+    val senderListener: String,
   )
 
   data class RemoteDevice(
@@ -181,6 +192,11 @@ internal class RelayClient(private val baseUrl: String) {
 
   private fun JSONObject.optionalLong(key: String): Long? =
     optLong(key).takeIf { has(key) && !isNull(key) && it > 0L }
+
+  private fun JSONObject.senderListener(): String {
+    val value = optString("senderListener")
+    return if (value == "up" || value == "down" || value == "unknown") value else "unknown"
+  }
 
   companion object {
     private const val CONNECT_TIMEOUT_MS = 10_000

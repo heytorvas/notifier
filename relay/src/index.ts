@@ -2,6 +2,7 @@ export interface Env {
   DB: D1Database;
   CREATE_LIMITER: RateLimit;
   SEND_LIMITER: RateLimit;
+  HEALTH_LIMITER: RateLimit;
   FIREBASE_PROJECT_ID: string;
   FIREBASE_CLIENT_EMAIL: string;
   FIREBASE_PRIVATE_KEY: string;
@@ -34,6 +35,7 @@ const FID_PATTERN = /^[A-Za-z0-9_-]{20,128}$/;
 const ENCODED_PATTERN = /^[A-Za-z0-9_-]+$/;
 const MESSAGE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+export const SENDER_LISTENER_FRESH_MS = 3 * 60 * 60 * 1000;
 
 let cachedAccessToken: { value: string; expiresAt: number } | undefined;
 
@@ -87,6 +89,11 @@ async function route(request: Request, env: Env): Promise<Response> {
     return deviceProfile(request, env, deviceMatch[1]);
   }
 
+  const listenerMatch = url.pathname.match(/^\/v1\/inboxes\/([0-9a-f-]+)\/listener$/);
+  if (request.method === 'PUT' && listenerMatch?.[1]) {
+    return updateListener(request, env, listenerMatch[1]);
+  }
+
   const claimMatch = url.pathname.match(/^\/v1\/inboxes\/([0-9a-f-]+)\/claim$/);
   if (request.method === 'POST' && claimMatch?.[1]) {
     return claimInbox(request, env, claimMatch[1]);
@@ -123,10 +130,39 @@ async function unpairInbox(request: Request, env: Env, inboxId: string): Promise
 async function pairingStatus(request: Request, env: Env, inboxId: string): Promise<Response> {
   const inbox = await requireInbox(env, inboxId);
   await authorizeAny(request, [inbox.owner_token_hash, inbox.sender_token_hash]);
-  const timing = await env.DB.prepare('SELECT claimed_at FROM inboxes WHERE id = ?')
+  const timing = await env.DB.prepare(
+    'SELECT claimed_at, sender_listener_up, sender_listener_at FROM inboxes WHERE id = ?',
+  )
     .bind(inboxId)
-    .first<{ claimed_at: number | null }>();
-  return json({ claimed: inbox.sender_token_hash !== null, claimedAt: timing?.claimed_at ?? null });
+    .first<{
+      claimed_at: number | null;
+      sender_listener_up: number | null;
+      sender_listener_at: number | null;
+    }>();
+  return json({
+    claimed: inbox.sender_token_hash !== null,
+    claimedAt: timing?.claimed_at ?? null,
+    senderListener: describeSenderListener(
+      timing?.sender_listener_up ?? null,
+      timing?.sender_listener_at ?? null,
+      Date.now(),
+    ),
+  });
+}
+
+async function updateListener(request: Request, env: Env, inboxId: string): Promise<Response> {
+  const inbox = await requireInbox(env, inboxId);
+  await authorize(request, inbox.sender_token_hash);
+  const { success } = await env.HEALTH_LIMITER.limit({ key: inboxId });
+  if (!success) throw new HttpError(429, 'Too many listener updates.');
+  const body = await readJson(request);
+  if (typeof body.listening !== 'boolean') throw new HttpError(400, 'Invalid listener state.');
+  await env.DB.prepare(
+    'UPDATE inboxes SET sender_listener_up = ?, sender_listener_at = ? WHERE id = ?',
+  )
+    .bind(body.listening ? 1 : 0, Date.now(), inboxId)
+    .run();
+  return json({ listening: body.listening });
 }
 
 async function createInbox(request: Request, env: Env): Promise<Response> {
@@ -398,6 +434,16 @@ export function validateEnvelope(body: Record<string, unknown>): EncryptedEnvelo
     nonce: body.nonce,
     ciphertext: body.ciphertext,
   };
+}
+
+export function describeSenderListener(
+  listening: number | null,
+  reportedAt: number | null,
+  now: number,
+): 'up' | 'down' | 'unknown' {
+  if (reportedAt == null || reportedAt <= 0) return 'unknown';
+  if (now - reportedAt > SENDER_LISTENER_FRESH_MS) return 'down';
+  return listening === 1 ? 'up' : 'down';
 }
 
 export function classifyFcmFailure(

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { classifyFcmFailure, HttpError, validateEnvelope } from '../src/index';
+import {
+  classifyFcmFailure,
+  describeSenderListener,
+  HttpError,
+  SENDER_LISTENER_FRESH_MS,
+  validateEnvelope,
+} from '../src/index';
 
 describe('validateEnvelope', () => {
   const messageId = 'd9428888-122b-4e2d-8f48-0990c9f249e5';
@@ -29,6 +35,18 @@ describe('validateEnvelope', () => {
     { version: 1, messageId, nonce: '1234567890abcdef', ciphertext: 'a'.repeat(3_401) },
   ])('rejects malformed input', (input) => {
     expect(() => validateEnvelope(input)).toThrow(HttpError);
+  });
+});
+
+describe('describeSenderListener', () => {
+  const now = 20_000_000_000;
+
+  it('stays unknown until the sender reports, then follows that report until it goes stale', () => {
+    expect(describeSenderListener(null, null, now)).toBe('unknown');
+    expect(describeSenderListener(1, now, now)).toBe('up');
+    expect(describeSenderListener(0, now, now)).toBe('down');
+    expect(describeSenderListener(1, now - SENDER_LISTENER_FRESH_MS, now)).toBe('up');
+    expect(describeSenderListener(1, now - SENDER_LISTENER_FRESH_MS - 1, now)).toBe('down');
   });
 });
 

@@ -97,12 +97,31 @@ describe('DashboardScreen', () => {
     expect(screen.getByText('Reconnecting')).toBeTruthy();
     expect(
       screen.getByText(
-        'Android already allows notification access. If this stays, turn Notifier off and on in notification access.',
+        'Android already allows notification access. Notifier is restarting the listener. If this stays, turn Notifier off and on in notification access.',
       ),
     ).toBeTruthy();
     expect(screen.queryByText('Allow access')).toBeNull();
     fireEvent.press(screen.getByLabelText('Notification access'));
     expect(callbacks.onFixPermission).toHaveBeenCalledTimes(1);
+  });
+
+  it('tells the receiver when the sending device is not reading notifications', async () => {
+    const screen = await render(
+      <DashboardScreen
+        {...callbacks}
+        apps={[]}
+        notificationAccess
+        pairedAt={null}
+        peer={null}
+        role="receiver"
+        senderListener="down"
+        sensitiveContentLimited={false}
+      />,
+    );
+
+    expect(screen.getByText('Not delivering')).toBeTruthy();
+    expect(screen.getByText('The sending device is not reading notifications.')).toBeTruthy();
+    expect(screen.queryByLabelText('Notification access')).toBeNull();
   });
 
   it('shows newest alerts and activity inside the dashboard', async () => {

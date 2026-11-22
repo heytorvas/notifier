@@ -17,7 +17,13 @@ describe('connectionStatus', () => {
 
   it('is connected when a transmitter listener is bound or a receiver can post', () => {
     expect(connectionStatus('transmitter', true, true)).toBe('connected');
-    expect(connectionStatus('receiver', true, true)).toBe('connected');
+    expect(connectionStatus('receiver', true, true, 'unknown')).toBe('connected');
+    expect(connectionStatus('receiver', true, true, 'up')).toBe('connected');
+  });
+
+  it('does not call the receiver connected while the sender listener is down', () => {
+    expect(connectionStatus('receiver', true, true, 'down')).toBe('sender-down');
+    expect(connectionStatus('transmitter', true, true, 'down')).toBe('connected');
   });
 });
 

@@ -22,6 +22,7 @@ class NotifierListenerService : NotificationListenerService() {
     ListenerConnectionState.connected = true
     ListenerRecovery.noteConnected(this)
     ListenerSession.attach(this)
+    PairingSync.reportCurrentListener(this, true)
     DeviceJournal(this).quietly { addDiagnostic("Listener connected") }
     publishActiveNotifications()
   }
@@ -29,6 +30,7 @@ class NotifierListenerService : NotificationListenerService() {
   override fun onListenerDisconnected() {
     ListenerSession.detach(this)
     ListenerConnectionState.connected = false
+    PairingSync.reportCurrentListener(this, false)
     DeviceJournal(this).quietly { addDiagnostic("Listener disconnected") }
     requestRebind(ComponentName(this, NotifierListenerService::class.java))
     super.onListenerDisconnected()

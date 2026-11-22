@@ -36,6 +36,10 @@ internal class NotifierStore(context: Context) {
     get() = preferences.getString(KEY_PEER_MODEL, "").orEmpty()
     set(value) = preferences.edit().putString(KEY_PEER_MODEL, value).apply()
 
+  var senderListener: String
+    get() = listenerValue(preferences.getString(KEY_SENDER_LISTENER, "unknown"))
+    set(value) = preferences.edit().putString(KEY_SENDER_LISTENER, listenerValue(value)).apply()
+
   var listenerResetCount: Int
     get() = preferences.getInt(KEY_LISTENER_RESETS, 0)
     set(value) = preferences.edit().putInt(KEY_LISTENER_RESETS, value).apply()
@@ -107,6 +111,7 @@ internal class NotifierStore(context: Context) {
       .remove(KEY_PAIRED_AT)
       .remove(KEY_PEER_BRAND)
       .remove(KEY_PEER_MODEL)
+      .remove(KEY_SENDER_LISTENER)
       .remove(KEY_LISTENER_RESETS)
       .remove(KEY_LISTENER_RESET_AT)
       .remove(KEY_LISTENER_DOWN_SINCE)
@@ -140,6 +145,9 @@ internal class NotifierStore(context: Context) {
     return array.toString()
   }
 
+  private fun listenerValue(value: String?): String =
+    if (value == "up" || value == "down" || value == "unknown") value else "unknown"
+
   private fun setSecure(key: String, value: String?) {
     if (value == null) {
       secureStore.remove(key)
@@ -161,6 +169,7 @@ internal class NotifierStore(context: Context) {
     private const val KEY_PAIRED_AT = "paired_at"
     private const val KEY_PEER_BRAND = "peer_brand"
     private const val KEY_PEER_MODEL = "peer_model"
+    private const val KEY_SENDER_LISTENER = "sender_listener"
     private const val KEY_LISTENER_RESETS = "listener_resets"
     private const val KEY_LISTENER_RESET_AT = "listener_reset_at"
     private const val KEY_LISTENER_DOWN_SINCE = "listener_down_since"

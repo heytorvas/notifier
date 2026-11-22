@@ -6,6 +6,7 @@ import {
   connectionStatus,
   type AlertRecord,
   type DiagnosticRecord,
+  type SenderListener,
 } from '../../domain/activity';
 import { formatDeviceName, formatPairedAt } from '../../domain/devices';
 import type { DeviceRole, InstalledApp, PeerDevice } from '../../infrastructure/notifierGateway';
@@ -20,6 +21,7 @@ type Props = {
   role: DeviceRole;
   notificationAccess: boolean;
   listenerConnected: boolean;
+  senderListener?: SenderListener;
   sensitiveContentLimited: boolean;
   peer: PeerDevice | null;
   pairedAt: number | null;
@@ -35,6 +37,7 @@ export function DashboardScreen({
   role,
   notificationAccess,
   listenerConnected,
+  senderListener = 'unknown',
   sensitiveContentLimited,
   peer,
   pairedAt,
@@ -48,7 +51,7 @@ export function DashboardScreen({
   const deviceName = peer ? formatDeviceName(peer.brand, peer.model) : '';
   const pairedLabel = formatPairedAt(pairedAt);
   const sending = role === 'transmitter';
-  const connection = connectionStatus(role, notificationAccess, listenerConnected);
+  const connection = connectionStatus(role, notificationAccess, listenerConnected, senderListener);
   const recentAlerts = byRecent(alerts);
   const recentDiagnostics = byRecent(diagnostics);
 
@@ -71,6 +74,7 @@ export function DashboardScreen({
             <AppText weight="medium">{connectionLabel[connection]}</AppText>
           </View>
           {connection === 'reconnecting' ? <AppText tone="faint">{reconnectingHint}</AppText> : null}
+          {connection === 'sender-down' ? <AppText tone="faint">{senderDownHint}</AppText> : null}
           {connection === 'reconnecting' ? (
             <TextAction
               accessibilityLabel="Notification access"
@@ -175,12 +179,15 @@ export function DashboardScreen({
 }
 
 const reconnectingHint =
-  'Android already allows notification access. If this stays, turn Notifier off and on in notification access.';
+  'Android already allows notification access. Notifier is restarting the listener. If this stays, turn Notifier off and on in notification access.';
+
+const senderDownHint = 'The sending device is not reading notifications.';
 
 const connectionLabel = {
   connected: 'Connected',
   'access-off': 'Access off',
   reconnecting: 'Reconnecting',
+  'sender-down': 'Not delivering',
 } as const;
 
 const styles = StyleSheet.create({

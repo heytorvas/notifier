@@ -15,6 +15,7 @@ describe('web notifier gateway', () => {
       paired: false,
       notificationAccess: false,
       listenerConnected: false,
+      senderListener: 'unknown',
       sensitiveContentLimited: false,
       selectedPackages: [],
       pairedAt: null,

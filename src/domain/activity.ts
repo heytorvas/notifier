@@ -2,7 +2,8 @@ import type { DeviceRole } from '../infrastructure/notifierGateway';
 
 export type AlertDirection = 'in' | 'out';
 export type AlertStatus = 'pending' | 'delivered' | 'failed';
-export type ConnectionStatus = 'connected' | 'access-off' | 'reconnecting';
+export type ConnectionStatus = 'connected' | 'access-off' | 'reconnecting' | 'sender-down';
+export type SenderListener = 'up' | 'down' | 'unknown';
 
 export type AlertRecord = {
   id: string;
@@ -31,9 +32,11 @@ export function connectionStatus(
   role: DeviceRole | null,
   notificationAccess: boolean,
   listenerConnected: boolean,
+  senderListener: SenderListener = 'unknown',
 ): ConnectionStatus {
   if (!notificationAccess) return 'access-off';
   if (role === 'transmitter' && !listenerConnected) return 'reconnecting';
+  if (role === 'receiver' && senderListener === 'down') return 'sender-down';
   return 'connected';
 }
 

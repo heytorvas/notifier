@@ -21,6 +21,14 @@ namespace_id = "1002"
   limit = 120
   period = 60
 
+[[ratelimits]]
+name = "HEALTH_LIMITER"
+namespace_id = "1003"
+
+  [ratelimits.simple]
+  limit = 12
+  period = 60
+
 [[d1_databases]]
 binding = "DB"
 database_name = "notifier-relay"

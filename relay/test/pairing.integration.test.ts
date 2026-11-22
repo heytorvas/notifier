@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import worker, { type Env } from '../src/index';
+import worker, { SENDER_LISTENER_FRESH_MS, type Env } from '../src/index';
 
 const ORIGIN = 'https://relay.example.test';
 const FID = 'cdefghijklmnopqrstuvwx';
@@ -168,6 +168,7 @@ describe('pairing API', () => {
       FIREBASE_CLIENT_EMAIL: 'firebase@example.invalid',
       FIREBASE_PRIVATE_KEY: await createPrivateKey(),
       ANDROID_PACKAGE_NAME: env.ANDROID_PACKAGE_NAME,
+      HEALTH_LIMITER: env.HEALTH_LIMITER,
     };
 
     const first = await worker.fetch(sendRequest(), testEnv);
@@ -329,6 +330,60 @@ describe('pairing API', () => {
       request(`/v1/inboxes/${owned.inboxId}/status`, { token: owned.ownerToken }),
     );
     expect(afterOwner.status).toBe(404);
+  });
+
+  it('publishes sender listener health to the receiver and ignores a stale report', async () => {
+    const created = await createInbox();
+    const claimed = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/claim`, {
+        method: 'POST',
+        token: created.pairingToken,
+      }),
+    );
+    const { senderToken } = await json<{ senderToken: string }>(claimed);
+    const before = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/status`, { token: created.ownerToken }),
+    );
+    expect(await json<{ senderListener: string }>(before)).toMatchObject({ senderListener: 'unknown' });
+
+    const ownerWrite = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/listener`, {
+        method: 'PUT',
+        token: created.ownerToken,
+        body: { listening: false },
+      }),
+    );
+    expect(ownerWrite.status).toBe(401);
+
+    const invalid = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/listener`, {
+        method: 'PUT',
+        token: senderToken,
+        body: { listening: 'yes' },
+      }),
+    );
+    expect(invalid.status).toBe(400);
+
+    const reported = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/listener`, {
+        method: 'PUT',
+        token: senderToken,
+        body: { listening: false },
+      }),
+    );
+    expect(reported.status).toBe(200);
+    const down = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/status`, { token: created.ownerToken }),
+    );
+    expect(await json<{ senderListener: string }>(down)).toMatchObject({ senderListener: 'down' });
+
+    await env.DB.prepare('UPDATE inboxes SET sender_listener_up = 1, sender_listener_at = ? WHERE id = ?')
+      .bind(Date.now() - SENDER_LISTENER_FRESH_MS - 60_000, created.inboxId)
+      .run();
+    const stale = await dispatch(
+      request(`/v1/inboxes/${created.inboxId}/status`, { token: senderToken }),
+    );
+    expect(await json<{ senderListener: string }>(stale)).toMatchObject({ senderListener: 'down' });
   });
 
   it('rejects a sender that exceeds the message rate limit', async () => {

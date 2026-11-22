@@ -40,11 +40,14 @@ export type DiagnosticRecord = {
   message: string;
 };
 
+export type SenderListener = 'up' | 'down' | 'unknown';
+
 export type NativeState = {
   role: DeviceRole | null;
   paired: boolean;
   notificationAccess: boolean;
   listenerConnected: boolean;
+  senderListener?: SenderListener;
   sensitiveContentLimited: boolean;
   selectedPackages: string[];
   pairedAt: number | null;

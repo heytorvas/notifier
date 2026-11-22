@@ -28,11 +28,14 @@ export type DiagnosticRecord = {
   message: string;
 };
 
+export type SenderListener = 'up' | 'down' | 'unknown';
+
 export type NativeState = {
   role: DeviceRole | null;
   paired: boolean;
   notificationAccess: boolean;
   listenerConnected: boolean;
+  senderListener: SenderListener;
   sensitiveContentLimited: boolean;
   selectedPackages: string[];
   pairedAt: number | null;
@@ -52,6 +55,7 @@ const emptyState: NativeState = {
   paired: false,
   notificationAccess: false,
   listenerConnected: false,
+  senderListener: 'unknown',
   sensitiveContentLimited: false,
   selectedPackages: [],
   pairedAt: null,

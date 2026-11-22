@@ -72,6 +72,7 @@ export default function DashboardRoute() {
         }
         diagnostics={diagnostics}
         listenerConnected={state.listenerConnected}
+        senderListener={state.senderListener ?? 'unknown'}
         notificationAccess={state.notificationAccess}
         onEditApps={() => {
           void loadApps()
