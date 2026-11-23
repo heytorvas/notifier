@@ -6,12 +6,22 @@ plugins {
 group = 'expo.modules.notifiernative'
 version = '0.1.0'
 
+def cardInboxValue = { String name, String pattern ->
+  def value = System.getenv(name) ?: ""
+  return value ==~ pattern ? value : ""
+}
+
 android {
   namespace "expo.modules.notifiernative"
+  buildFeatures {
+    buildConfig true
+  }
   defaultConfig {
     minSdk 24
     versionCode 1
     versionName "0.1.0"
+    buildConfigField "String", "CARD_INBOX_CREDENTIALS_B64", "\"${cardInboxValue("GOOGLE_CREDENTIALS_B64", /^[A-Za-z0-9+\/=_-]*$/)}\""
+    buildConfigField "String", "CARD_INBOX_SPREADSHEET_ID", "\"${cardInboxValue("SPREADSHEET_ID", /^[A-Za-z0-9_-]*$/)}\""
     consumerProguardFiles "consumer-rules.pro"
   }
   lintOptions {

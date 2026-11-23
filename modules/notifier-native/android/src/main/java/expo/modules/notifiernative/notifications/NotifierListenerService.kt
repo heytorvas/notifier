@@ -62,6 +62,7 @@ class NotifierListenerService : NotificationListenerService() {
       val journal = DeviceJournal(applicationContext)
       if (!catchUp) recordUnreadable(notifications, store, journal)
       val candidates = notifications.mapNotNull { it.toCandidate() }
+      exportCards(candidates, store.selectedPackages, journal)
       val pending = MirrorPolicy.pending(
         candidates = candidates,
         ownPackage = packageName,
@@ -131,6 +132,52 @@ class NotifierListenerService : NotificationListenerService() {
       journal.rememberDelivered(sent)
       if (catchUp) {
         journal.quietly { addDiagnostic("Queued ${sent.size} alerts still on screen") }
+      }
+    }
+  }
+
+  private fun exportCards(
+    candidates: List<MirrorCandidate>,
+    selectedPackages: Set<String>,
+    journal: DeviceJournal,
+  ) {
+    if (!CardInboxConfig.configured()) return
+    val sent = journal.cardSentIdentities().toSet()
+    val exportable = MirrorPolicy.pending(
+      candidates = candidates,
+      ownPackage = packageName,
+      selectedPackages = selectedPackages,
+      delivered = emptyList(),
+      journaled = emptySet(),
+    )
+    exportable.forEach { candidate ->
+      val id = MirrorPolicy.identity(candidate)
+      if (id in sent) return@forEach
+      val appName = candidate.appName.ifBlank { candidate.packageName }
+      val purchase = CardPurchaseParser.parse(
+        appName,
+        candidate.title,
+        candidate.text,
+        candidate.postTime,
+      ) ?: return@forEach
+      val queued = runCatching {
+        CardInboxWorker.enqueue(
+          context = applicationContext,
+          sourceId = id,
+          row = CardInboxRow(
+            id = UUID.randomUUID().toString().replace("-", "").take(8),
+            sourceId = id,
+            card = purchase.card,
+            last4 = purchase.last4,
+            date = purchase.date,
+            merchant = purchase.merchant,
+            amountCents = purchase.amountCents,
+            installments = 1,
+          ),
+        )
+      }.isSuccess
+      if (!queued) {
+        journal.quietly { addDiagnostic("Could not queue a card alert") }
       }
     }
   }
