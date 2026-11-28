@@ -1,11 +1,16 @@
 package expo.modules.notifiernative.network
 
+import android.content.Context
+import android.net.Network
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
-internal class RelayClient(private val baseUrl: String) {
+internal class RelayClient(
+  private val baseUrl: String,
+  private val network: Network? = null,
+) {
   init {
     require(URI(baseUrl).scheme == "https") { "The relay URL must use HTTPS." }
   }
@@ -134,7 +139,8 @@ internal class RelayClient(private val baseUrl: String) {
     body: JSONObject?,
     bearerToken: String? = null,
   ): JSONObject {
-    val connection = URL("$baseUrl$path").openConnection() as HttpURLConnection
+    val target = URL("$baseUrl$path")
+    val connection = (network?.openConnection(target) ?: target.openConnection()) as HttpURLConnection
     return try {
       connection.requestMethod = method
       connection.connectTimeout = CONNECT_TIMEOUT_MS
@@ -199,6 +205,9 @@ internal class RelayClient(private val baseUrl: String) {
   }
 
   companion object {
+    fun connected(context: Context, baseUrl: String): RelayClient =
+      RelayClient(baseUrl, DeviceNetwork.validated(context))
+
     private const val CONNECT_TIMEOUT_MS = 10_000
     private const val READ_TIMEOUT_MS = 15_000
   }

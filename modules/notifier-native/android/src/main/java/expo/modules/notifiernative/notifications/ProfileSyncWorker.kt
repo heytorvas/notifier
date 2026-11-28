@@ -29,7 +29,7 @@ internal class ProfileSyncWorker(
     val store = NotifierStore(applicationContext)
     val pairing = store.pairingState ?: return Result.success()
     val relayUrl = store.relayUrl ?: return Result.failure()
-    val client = RelayClient(relayUrl)
+    val client = RelayClient.connected(applicationContext, relayUrl)
     return runCatching {
       when (pairing.role) {
         DeviceRole.RECEIVER -> syncReceiver(store, client, pairing.inboxId, pairing.ownerToken)

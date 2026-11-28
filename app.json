@@ -2,7 +2,7 @@
   "expo": {
     "name": "Notifier",
     "slug": "notifier",
-    "version": "1.4.0",
+    "version": "1.4.1",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -19,7 +19,7 @@
     "android": {
       "backgroundColor": "#000000",
       "package": "dev.heytor.notifier",
-      "versionCode": 6,
+      "versionCode": 7,
       "allowBackup": false,
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",

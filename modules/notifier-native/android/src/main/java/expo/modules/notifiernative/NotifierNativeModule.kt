@@ -166,7 +166,7 @@ class NotifierNativeModule : Module() {
       val registrationId = Tasks.await(FirebaseInstallations.getInstance().id)
       store.registrationId = registrationId
 
-      val credentials = RelayClient(relayUrl).createInbox(registrationId)
+      val credentials = RelayClient.connected(context, relayUrl).createInbox(registrationId)
       val pairing = PairingState(
         role = DeviceRole.RECEIVER,
         inboxId = credentials.inboxId,
@@ -184,7 +184,7 @@ class NotifierNativeModule : Module() {
 
       val store = NotifierStore(requireContext())
       val relayUrl = requireNotNull(store.relayUrl) { "Relay configuration is missing." }
-      val claimed = RelayClient(relayUrl).claimInbox(pairing.inboxId, pairing.pairingToken)
+      val claimed = RelayClient.connected(requireContext(), relayUrl).claimInbox(pairing.inboxId, pairing.pairingToken)
       if (claimed.claimedAt != null) store.pairedAt = claimed.claimedAt
       store.savePairing(
         PairingState(
@@ -205,7 +205,8 @@ class NotifierNativeModule : Module() {
       if (pairing?.role != DeviceRole.RECEIVER || pairing.ownerToken == null) {
         false
       } else {
-        val status = RelayClient(
+        val status = RelayClient.connected(
+          requireContext(),
           requireNotNull(store.relayUrl) { "Relay configuration is missing." },
         ).pairingStatus(pairing.inboxId, pairing.ownerToken)
         if (status.claimedAt != null) store.pairedAt = status.claimedAt

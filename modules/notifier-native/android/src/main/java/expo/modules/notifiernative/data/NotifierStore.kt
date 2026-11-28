@@ -40,14 +40,6 @@ internal class NotifierStore(context: Context) {
     get() = listenerValue(preferences.getString(KEY_SENDER_LISTENER, "unknown"))
     set(value) = preferences.edit().putString(KEY_SENDER_LISTENER, listenerValue(value)).apply()
 
-  var listenerResetCount: Int
-    get() = preferences.getInt(KEY_LISTENER_RESETS, 0)
-    set(value) = preferences.edit().putInt(KEY_LISTENER_RESETS, value).apply()
-
-  var listenerResetAt: Long
-    get() = preferences.getLong(KEY_LISTENER_RESET_AT, 0L)
-    set(value) = preferences.edit().putLong(KEY_LISTENER_RESET_AT, value).apply()
-
   var listenerDownSince: Long
     get() = preferences.getLong(KEY_LISTENER_DOWN_SINCE, 0L)
     set(value) = preferences.edit().putLong(KEY_LISTENER_DOWN_SINCE, value).apply()

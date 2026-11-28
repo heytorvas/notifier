@@ -73,61 +73,12 @@ class LocalRecordsTest {
   }
 
   @Test
-  fun aFreshProcessOnlyRebindsUntilTheListenerHasStayedDown() {
-    assertEquals(
-      ListenerBinding.RecoveryStep.REBIND,
-      ListenerBinding.recoveryStep(
-        shouldAttempt = true,
-        downForMs = 0,
-        millisSinceReset = null,
-        resetsThisOutage = 0,
-      ),
-    )
-    assertEquals(
-      ListenerBinding.RecoveryStep.RESET,
-      ListenerBinding.recoveryStep(
-        shouldAttempt = true,
-        downForMs = ListenerBinding.RESET_GRACE_MS,
-        millisSinceReset = null,
-        resetsThisOutage = 0,
-      ),
-    )
-    assertEquals(
-      ListenerBinding.RecoveryStep.REBIND,
-      ListenerBinding.recoveryStep(
-        shouldAttempt = true,
-        downForMs = ListenerBinding.RESET_GRACE_MS,
-        millisSinceReset = 30_000,
-        resetsThisOutage = 1,
-      ),
-    )
-    assertEquals(
-      ListenerBinding.RecoveryStep.NONE,
-      ListenerBinding.recoveryStep(
-        shouldAttempt = false,
-        downForMs = ListenerBinding.RESET_GRACE_MS,
-        millisSinceReset = null,
-        resetsThisOutage = 0,
-      ),
-    )
-    assertEquals(
-      ListenerBinding.RecoveryStep.REBIND,
-      ListenerBinding.recoveryStep(
-        shouldAttempt = true,
-        downForMs = ListenerBinding.RESET_COOLDOWN_MS,
-        millisSinceReset = null,
-        resetsThisOutage = ListenerBinding.MAX_RESETS_PER_OUTAGE,
-      ),
-    )
-  }
-
-  @Test
   fun listenerHealthIsNotReportedDownDuringTheStartupGrace() {
     assertFalse(ListenerBinding.shouldReportListener(false, downForMs = 0, lastReported = null, millisSinceReport = 0))
     assertTrue(
       ListenerBinding.shouldReportListener(
         connected = false,
-        downForMs = ListenerBinding.RESET_GRACE_MS,
+        downForMs = ListenerBinding.DOWN_REPORT_GRACE_MS,
         lastReported = null,
         millisSinceReport = 0,
       ),

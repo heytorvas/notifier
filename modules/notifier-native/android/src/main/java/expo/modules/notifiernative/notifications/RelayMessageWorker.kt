@@ -43,7 +43,7 @@ internal class RelayMessageWorker(
     val relayUrl = store.relayUrl ?: return Result.failure()
 
     return runCatching {
-      RelayClient(relayUrl).send(
+      RelayClient.connected(applicationContext, relayUrl).send(
         pairing.inboxId,
         senderToken,
         messageId,

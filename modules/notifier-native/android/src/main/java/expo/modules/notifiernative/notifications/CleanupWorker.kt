@@ -21,7 +21,7 @@ internal class CleanupWorker(
     val store = NotifierStore(applicationContext)
     val cleanup = store.pendingCleanup ?: return Result.success()
     return runCatching {
-      RelayClient(cleanup.relayUrl).unpair(cleanup.inboxId, cleanup.token)
+      RelayClient.connected(applicationContext, cleanup.relayUrl).unpair(cleanup.inboxId, cleanup.token)
       store.clearPendingCleanup()
       Result.success()
     }.getOrElse { error ->

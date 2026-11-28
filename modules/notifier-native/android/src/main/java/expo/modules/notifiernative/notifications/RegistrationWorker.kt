@@ -22,7 +22,7 @@ internal class RegistrationWorker(
     val ownerToken = pairing.ownerToken ?: return Result.success()
     val registrationId = store.registrationId ?: return Result.success()
     return runCatching {
-      RelayClient(relayUrl).updateRegistration(pairing.inboxId, ownerToken, registrationId)
+      RelayClient.connected(applicationContext, relayUrl).updateRegistration(pairing.inboxId, ownerToken, registrationId)
       Result.success()
     }.getOrElse { error ->
       if (error is RelayClient.RelayException && DeliveryPolicy.isInboxMissing(error.statusCode, error.message)) {
