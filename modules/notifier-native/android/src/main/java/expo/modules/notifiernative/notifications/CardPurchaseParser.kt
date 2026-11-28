@@ -25,7 +25,7 @@ internal object CardPurchaseParser {
   )
   private val money = Regex("""R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2}|\d+)""")
   private val compraWord = Regex("""(?i)(?<!\p{L})compra(?!\p{L})""")
-  private val reversal = Regex("""(?i)estorn|cancelad[oa]""")
+  private val reversal = Regex("""(?i)estorn|cancelad[oa]|iof de volta""")
   private val reversalBlock = Regex("""(?i)pagamento|fatura|(?<!\p{L})pix(?!\p{L})|d[eé]bito""")
   private val c6Title = Regex("""(?i)compra no cr[eé]dito aprovada""")
   private val notApproved = Regex("""(?i)n[aã]o foi aprovada""")

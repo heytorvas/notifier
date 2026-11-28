@@ -52,6 +52,22 @@ class CardPurchaseParserTest {
   }
 
   @Test
+  fun nuIofRefundIsAReversalEvenWhenTheBodyMentionsThePurchase() {
+    val refund = CardPurchaseParser.parse(
+      "Nu",
+      "IOF de volta",
+      "Você recebeu R$ 8,90 de volta referentes ao IOF da sua compra em Amazon",
+      posted(2026, 11, 27),
+    )
+
+    assertEquals(CardPurchase("NU", "", "27/11/2026", "IOF de volta", -890), refund)
+    assertEquals(
+      CardPurchase("NU", "", "23/11/2026", "Mercado", 1000),
+      CardPurchaseParser.parse("Nu", "Mercado", "Compra de R$ 10,00 aprovada", posted(2026, 11, 23)),
+    )
+  }
+
+  @Test
   fun reversalIsNegativeAndAPaymentReversalIsIgnored() {
     val reversal = CardPurchaseParser.parse("Nu", "Estorno", "Estorno de R$ 10,00", posted(2026, 12, 5))
     assertEquals(-1000, reversal?.amountCents)
